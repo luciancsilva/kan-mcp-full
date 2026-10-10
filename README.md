@@ -85,8 +85,8 @@ Tested against Kan 0.6.0 (`ghcr.io/kanbn/kan:latest`) with an S3-compatible stor
 From the repository:
 
 ```bash
-git clone https://github.com/luciancsilva/kan-mcp
-cd kan-mcp
+git clone https://github.com/luciancsilva/kan-mcp-full
+cd kan-mcp-full
 bun install
 bun run build        # optional: creates a standalone ./kan-mcp-full binary
 ```
@@ -123,7 +123,7 @@ Add this to your agent/IDE's MCP server configuration (use the absolute path of 
 The image runs the MCP over **Streamable HTTP** (`POST /mcp`) protected by a bearer token, so it can stay running next to your Kan and be used by n8n, agents or remote MCP clients. It talks to any Kan through its URL.
 
 ```bash
-git clone https://github.com/luciancsilva/kan-mcp && cd kan-mcp
+git clone https://github.com/luciancsilva/kan-mcp-full && cd kan-mcp-full
 cp .env.example .env          # fill KAN_API_KEY, KAN_API_BASE_URL and MCP_AUTH_TOKEN (openssl rand -hex 32)
 mkdir -p uploads downloads && sudo chown 1000:1000 downloads
 docker compose up -d          # builds the image from the Dockerfile when the published one is not available

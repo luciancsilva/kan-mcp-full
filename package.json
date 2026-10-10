@@ -27,11 +27,11 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/luciancsilva/kan-mcp.git"
+    "url": "git+https://github.com/luciancsilva/kan-mcp-full.git"
   },
-  "homepage": "https://github.com/luciancsilva/kan-mcp#readme",
+  "homepage": "https://github.com/luciancsilva/kan-mcp-full#readme",
   "bugs": {
-    "url": "https://github.com/luciancsilva/kan-mcp/issues"
+    "url": "https://github.com/luciancsilva/kan-mcp-full/issues"
   },
   "scripts": {
     "build": "bun build src/index.ts --compile --outfile kan-mcp-full",
