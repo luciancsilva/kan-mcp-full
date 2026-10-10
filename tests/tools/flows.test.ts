@@ -187,7 +187,7 @@ describe('server.health', () => {
   test('is ok when the API answers and reports the package version', async () => {
     kan.handler = () => [];
     const result = await run('server.health');
-    expect(result).toMatchObject({ ok: true, data: { status: 'ok', apiReachable: true, version: '0.3.0' } });
+    expect(result).toMatchObject({ ok: true, data: { status: 'ok', apiReachable: true, version: '0.4.0' } });
   });
 
   test('is unhealthy when the API fails', async () => {

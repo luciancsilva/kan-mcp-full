@@ -311,11 +311,19 @@ if (result.ok) {
 
 ---
 
+## Docker
+
+`Dockerfile` (bun alpine, non-root) and `docker-compose.yml` run the HTTP mode. Validate changes with `docker build` and by running the compose against a disposable Kan (`scripts/integration-up.sh`). In sandboxes that intercept TLS, the build container needs the proxy CA to run `bun install`.
+
+---
+
 ## Directory Structure
 
 ```
 src/
-├── index.ts              # MCP server entry point
+├── index.ts              # Entry point: stdio or HTTP (MCP_TRANSPORT)
+├── server.ts             # createKanServer(): registers tools and resources
+├── http.ts               # Streamable HTTP server (POST /mcp, bearer token, /health)
 ├── version.ts            # VERSION (keep in sync with package.json)
 ├── client.ts             # Kan API client (KanClient class, retries, error details)
 ├── types.ts              # Branded IDs, interfaces, discriminated unions
@@ -340,6 +348,8 @@ src/
 tests/
 ├── helpers.ts            # useKanMock(), run(): fetch mock that records requests
 ├── client.test.ts        # API client tests
+├── http.test.ts          # HTTP transport with the MCP SDK client against a fake Kan
+├── entrypoint.test.ts    # Environment validation of src/index.ts
 ├── tools/                # api-contract (method/path/body per tool), flows, attachments, ...
 └── integration/          # Real Kan: tools.test.ts, attachment.test.ts (see docs/testing)
 ```

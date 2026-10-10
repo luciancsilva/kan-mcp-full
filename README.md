@@ -118,6 +118,54 @@ Add this to your agent/IDE's MCP server configuration (use the absolute path of 
 
 `KAN_API_KEY` is required. The other variables are optional (see Configuration and Attachments above).
 
+## Docker (HTTP service)
+
+The image runs the MCP over **Streamable HTTP** (`POST /mcp`) protected by a bearer token, so it can stay running next to your Kan and be used by n8n, agents or remote MCP clients. It talks to any Kan through its URL.
+
+```bash
+cp .env.example .env          # fill KAN_API_KEY, KAN_API_BASE_URL and MCP_AUTH_TOKEN (openssl rand -hex 32)
+docker compose pull           # image: ghcr.io/luciancsilva/kan-mcp-full:latest  (or: docker compose build)
+docker compose up -d
+curl http://127.0.0.1:3333/health      # {"status":"ok","version":"..."}
+```
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `KAN_API_KEY` | required | Kan API key |
+| `KAN_API_BASE_URL` | required in compose | e.g. `https://kan.example.com/api/v1` |
+| `MCP_AUTH_TOKEN` | required | Clients send `Authorization: Bearer <token>` (at least 16 characters) |
+| `MCP_TRANSPORT` | `http` in the image, `stdio` otherwise | `http` or `stdio` |
+| `MCP_HOST` / `MCP_PORT` | `0.0.0.0` in the image / `3333` | Listen address |
+| `KAN_MCP_UPLOAD_DIR` | `./uploads` | Host folder mounted read-only at `/data/uploads`; `attachment.add` `filePath` reads from it |
+| `KAN_MCP_DOWNLOAD_DIR` | `./downloads` | Host folder mounted at `/data/downloads`; `attachment.download` writes to it. It must be writable by `MCP_UID`:`MCP_GID` (default 1000:1000) |
+
+Notes:
+- The port is published on `127.0.0.1` only. To reach it from other machines, put a reverse proxy with **TLS** in front (the token travels in a header).
+- `/health` needs no token and shows only the version. Everything else requires the token.
+- The container is non-root, with a read-only filesystem, no capabilities and `no-new-privileges`. Inside the container `filePath` is limited to `/data/uploads`, so the model cannot read other files.
+- Kan's presigned storage URLs (R2, S3, MinIO) must be reachable from the container, since the file is sent straight to the storage.
+- Kan on the same host: use `KAN_API_BASE_URL=http://host.docker.internal:3000/api/v1`, or join the Kan compose network.
+
+Clients (any client that supports Streamable HTTP with a custom header):
+
+```bash
+# Claude Code
+claude mcp add --transport http kan https://mcp.example.com/mcp --header "Authorization: Bearer <MCP_AUTH_TOKEN>"
+```
+
+n8n: MCP Client node with Streamable HTTP, URL `http://kan-mcp:3333/mcp` (same Docker network) and a header `Authorization: Bearer <MCP_AUTH_TOKEN>`.
+
+stdio from the image (the MCP client starts the container on demand):
+
+```json
+{ "mcpServers": { "kan": { "command": "docker", "args": ["run", "-i", "--rm",
+  "-e", "MCP_TRANSPORT=stdio", "-e", "KAN_API_KEY", "-e", "KAN_API_BASE_URL",
+  "ghcr.io/luciancsilva/kan-mcp-full:latest"],
+  "env": { "KAN_API_KEY": "kan_...", "KAN_API_BASE_URL": "https://kan.example.com/api/v1" } } } }
+```
+
+Publishing the image: `.github/workflows/docker.yml` builds `linux/amd64` and `linux/arm64` and pushes `ghcr.io/<owner>/kan-mcp-full:latest` plus the version tags when a `v*.*.*` tag is pushed (or when run manually from the default branch). Pull requests only build. The first publication creates a private package: make it public in the GitHub package settings, or `docker login ghcr.io` on the server.
+
 ### Where to add the configuration
 
 | Agent/IDE | Location |
@@ -368,7 +416,9 @@ INTEGRATION_TEST=true bun test tests/integration
 
 ```
 src/
-├── index.ts               # MCP server entry (stdio), tool and resource registration
+├── index.ts               # Entry point: stdio or HTTP depending on MCP_TRANSPORT
+├── server.ts              # createKanServer(): tool and resource registration
+├── http.ts                # Streamable HTTP server with bearer token
 ├── client.ts              # Kan API client: auth, retries, timeouts, error details
 ├── attachment-source.ts   # filePath / url / base64 sources (path and SSRF safety)
 ├── types.ts  errors.ts  utils.ts  version.ts

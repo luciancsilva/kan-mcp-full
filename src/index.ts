@@ -1,114 +1,58 @@
 #!/usr/bin/env bun
-import { Server } from "@modelcontextprotocol/sdk/server/index.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { CallToolRequestSchema, ListToolsRequestSchema, ListResourcesRequestSchema, ReadResourceRequestSchema } from "@modelcontextprotocol/sdk/types.js";
-import { KanClient } from "./client.js";
-import { VERSION } from "./version.js";
-import { toMcpError } from "./errors.js";
-import { tools, type Tool } from "./tools/mod.js";
-import { resourceList, handleResource } from "./tools/resources.js";
+import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { KanClient } from './client.js';
+import { toMcpError } from './errors.js';
+import { createKanServer } from './server.js';
+import { startHttpServer } from './http.js';
 
 const apiKey = process.env.KAN_API_KEY;
 if (!apiKey) {
-  console.error("KAN_API_KEY environment variable is required");
+  console.error('KAN_API_KEY environment variable is required');
   process.exit(1);
 }
 
 const client = new KanClient(apiKey);
+const transportKind = (process.env.MCP_TRANSPORT ?? 'stdio').toLowerCase();
 
-const server = new Server(
-  { name: "kan-mcp-full", version: VERSION },
-  { capabilities: { tools: {}, resources: {} } }
-);
-
-server.setRequestHandler(ListToolsRequestSchema, async () => {
-  return {
-    tools: tools.map((tool: Tool) => ({
-      name: tool.name,
-      description: tool.description,
-      inputSchema: tool.inputSchema,
-    })),
+if (transportKind === 'http') {
+  const token = process.env.MCP_AUTH_TOKEN;
+  if (!token) {
+    console.error('MCP_AUTH_TOKEN environment variable is required when MCP_TRANSPORT=http');
+    process.exit(1);
+  }
+  try {
+    const port = Number(process.env.MCP_PORT ?? 3333);
+    const http = startHttpServer({
+      client,
+      token,
+      host: process.env.MCP_HOST ?? '127.0.0.1',
+      port,
+    });
+    console.error(`kan-mcp-full listening on http://${http.hostname}:${http.port}/mcp`);
+    const shutdown = () => {
+      console.error('Shutting down gracefully...');
+      void http.stop().finally(() => process.exit(0));
+    };
+    process.on('SIGINT', shutdown);
+    process.on('SIGTERM', shutdown);
+  } catch (error) {
+    console.error('Server error:', toMcpError(error).message);
+    process.exit(1);
+  }
+} else if (transportKind === 'stdio') {
+  createKanServer(client)
+    .connect(new StdioServerTransport())
+    .catch((error) => {
+      console.error('Server error:', toMcpError(error).message);
+      process.exit(1);
+    });
+  const shutdown = () => {
+    console.error('Shutting down gracefully...');
+    process.exit(0);
   };
-});
-
-server.setRequestHandler(ListResourcesRequestSchema, async () => ({
-  resources: resourceList.map(r => ({
-    uri: r.uri,
-    name: r.name,
-    description: r.description,
-    mimeType: r.mimeType,
-  })),
-}));
-
-server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
-  const { uri } = request.params;
-  try {
-    return await handleResource(uri, client);
-  } catch (error) {
-    return {
-      contents: [{
-        uri,
-        mimeType: 'application/json',
-        text: JSON.stringify({ error: toMcpError(error).message }),
-      }],
-      isError: true,
-    };
-  }
-});
-
-server.setRequestHandler(CallToolRequestSchema, async (request) => {
-  const { name, arguments: args = {} } = request.params;
-  const tool = tools.find((t: Tool) => t.name === name);
-  if (!tool) {
-    return { content: [{ type: "text", text: `Unknown tool: ${name}` }], isError: true };
-  }
-  try {
-    const result = await tool.handler(client, args);
-    if (result.ok) {
-      return { content: [{ type: "text", text: JSON.stringify(result.data, null, 2) }] };
-    } else {
-      return { content: [{ type: "text", text: result.error }], isError: true };
-    }
-  } catch (error) {
-    return { content: [{ type: "text", text: toMcpError(error).message }], isError: true };
-  }
-});
-
-server.setRequestHandler(ListResourcesRequestSchema, async () => ({
-  resources: resourceList.map(r => ({
-    uri: r.uri,
-    name: r.name,
-    description: r.description,
-    mimeType: r.mimeType,
-  })),
-}));
-
-server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
-  const { uri } = request.params;
-  try {
-    return await handleResource(uri, client);
-  } catch (error) {
-    return {
-      contents: [{
-        uri,
-        mimeType: 'application/json',
-        text: JSON.stringify({ error: toMcpError(error).message }),
-      }],
-      isError: true,
-    };
-  }
-});
-
-const transport = new StdioServerTransport();
-server.connect(transport).catch((error) => {
-  console.error("Server error:", toMcpError(error).message);
+  process.on('SIGINT', shutdown);
+  process.on('SIGTERM', shutdown);
+} else {
+  console.error(`Unknown MCP_TRANSPORT "${transportKind}" (use "stdio" or "http")`);
   process.exit(1);
-});
-
-const shutdown = () => {
-  console.error("Shutting down gracefully...");
-  process.exit(0);
-};
-
-process.on('SIGINT', shutdown);
-process.on('SIGTERM', shutdown);
+}
