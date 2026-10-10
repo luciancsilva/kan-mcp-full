@@ -5,7 +5,9 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-COMPOSE="docker compose -f docker-compose.integration.yml"
+# Optional: KAN_IT_ENV_FILE=/path/to/file with S3_* / NEXT_PUBLIC_*_BUCKET_NAME / NEXT_PUBLIC_STORAGE_*
+# to use an external S3 (e.g. Cloudflare R2) instead of the local RustFS. Buckets must already exist.
+COMPOSE="docker compose -f docker-compose.integration.yml ${KAN_IT_ENV_FILE:+--env-file $KAN_IT_ENV_FILE}"
 KAN=http://localhost:3000
 S3=http://localhost:9000
 
@@ -18,6 +20,7 @@ for _ in $(seq 1 90); do
 done
 curl -fsS -m 3 -o /dev/null "$KAN/api/health"
 
+if [ -z "${KAN_IT_ENV_FILE:-}" ]; then
 echo "Waiting for storage and creating buckets..."
 for bucket in kan-attachments kan-avatars; do
   for _ in $(seq 1 30); do
@@ -27,6 +30,7 @@ for bucket in kan-attachments kan-avatars; do
     sleep 1
   done
 done
+fi
 
 json() { python3 -c "import sys,json;print(json.load(sys.stdin)$1)"; }
 auth=(-H 'Content-Type: application/json' -H "Origin: $KAN")

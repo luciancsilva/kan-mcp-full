@@ -83,8 +83,16 @@ describe.skipIf(!enabled)('Attachment integration tests', () => {
     const saved = await readFile((downloaded as { data: { path: string } }).data.path);
     expect(sha256(saved)).toBe(sha256(original));
 
+    // The storage must really lose the object: Kan only logs (and ignores) S3 delete failures.
+    const rawCard = await client.request<{ attachments: { publicId: string; url: string }[] }>(
+      `/cards/${card}`
+    );
+    const storageUrl = rawCard.attachments.find((a) => a.publicId === publicId)?.url as string;
+    expect((await fetch(storageUrl)).status).toBe(200);
+
     const removed = await attachmentRemoveTool.handler(client, { attachmentPublicId: publicId });
     expect(removed).toEqual({ ok: true, data: { success: true } });
+    expect((await fetch(storageUrl)).status).toBe(404);
     expect((await list()).map((a) => a.publicId)).not.toContain(publicId);
 
     const again = await attachmentRemoveTool.handler(client, { attachmentPublicId: publicId });
@@ -118,7 +126,7 @@ describe.skipIf(!enabled)('Attachment integration tests', () => {
     expect((tooBig as { error: string }).error).toContain('limit');
     expect(await list()).toHaveLength(1);
     await removeAll();
-  });
+  }, 180_000); // 50 MB over a real network connection exceeds bun's default 5 s timeout
 
   test('reports an unknown card and refuses to leave the upload root', async () => {
     const unknown = await attachmentAddTool.handler(client, {
