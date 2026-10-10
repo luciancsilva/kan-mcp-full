@@ -1,143 +1,76 @@
-import { KanClient } from '../client';
-import { Label, ToolResult, ROUTES } from '../types';
-import { success, error, assertString, assertOptionalString } from '../utils';
-import { toMcpError } from '../errors';
+import { ROUTES } from '../types';
+import { assertString, assertOptionalString } from '../utils';
+import { defineTool } from './tool';
 
-interface Tool<TInput = unknown, TOutput = unknown> {
+interface LabelData {
+  publicId: string;
   name: string;
-  description: string;
-  inputSchema: {
-    type: 'object';
-    properties: Record<string, unknown>;
-    required: string[];
-  };
-  handler: (client: KanClient, input: TInput) => Promise<ToolResult<TOutput>>;
+  colourCode: string | null;
 }
 
-interface LabelCreateInput {
-  boardPublicId: string;
-  name: string;
-  colourCode: string;
-}
-
-interface LabelGetByIdInput {
-  publicId: string;
-}
-
-interface LabelUpdateInput {
-  publicId: string;
-  name?: string;
-  colourCode?: string;
-}
-
-interface LabelDeleteInput {
-  publicId: string;
-}
-
-export const labelCreateTool: Tool<LabelCreateInput, Label> = {
+export const labelCreateTool = defineTool<{ boardPublicId: string; name: string; colourCode: string }, LabelData>({
   name: 'label.create',
-  description: 'Create a new label',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      boardPublicId: { type: 'string' },
-      name: { type: 'string' },
-      colourCode: { type: 'string' },
-    },
-    required: ['boardPublicId', 'name', 'colourCode'],
-  },
-  handler: async (client: KanClient, input: LabelCreateInput): Promise<ToolResult<Label>> => {
-    try {
-      assertString(input.boardPublicId, 'boardPublicId');
-      assertString(input.name, 'name');
-      assertString(input.colourCode, 'colourCode');
-      const body: Record<string, unknown> = {
+  description: 'Create a label in a board. colourCode is a hex color such as #ff0000.',
+  properties: { boardPublicId: { type: 'string' }, name: { type: 'string' }, colourCode: { type: 'string' } },
+  required: ['boardPublicId', 'name', 'colourCode'],
+  run: async (client, input) => {
+    assertString(input.boardPublicId, 'boardPublicId');
+    assertString(input.name, 'name');
+    assertString(input.colourCode, 'colourCode');
+    return client.request<LabelData>(ROUTES.LABELS, {
+      method: 'POST',
+      body: JSON.stringify({
         boardPublicId: input.boardPublicId,
         name: input.name,
         colourCode: input.colourCode,
-      };
-      const data = await client.request<Label>(ROUTES.LABELS, {
-        method: 'POST',
-        body: JSON.stringify(body),
-      });
-      return success(data);
-    } catch (err) {
-      return error(toMcpError(err).message);
-    }
+      }),
+    });
   },
-};
+});
 
-export const labelGetByIdTool: Tool<LabelGetByIdInput, Label> = {
+export const labelGetByIdTool = defineTool<{ publicId: string }, LabelData>({
   name: 'label.getById',
-  description: 'Get label by public ID',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      publicId: { type: 'string' },
-    },
-    required: ['publicId'],
+  description: 'Get a label by public ID.',
+  properties: { publicId: { type: 'string' } },
+  required: ['publicId'],
+  run: async (client, input) => {
+    assertString(input.publicId, 'publicId');
+    return client.request<LabelData>(`${ROUTES.LABELS}/${input.publicId}`);
   },
-  handler: async (client: KanClient, input: LabelGetByIdInput): Promise<ToolResult<Label>> => {
-    try {
-      assertString(input.publicId, 'publicId');
-      const data = await client.request<Label>(`${ROUTES.LABELS}/${input.publicId}`);
-      return success(data);
-    } catch (err) {
-      return error(toMcpError(err).message);
-    }
-  },
-};
+});
 
-export const labelUpdateTool: Tool<LabelUpdateInput, Label> = {
+export const labelUpdateTool = defineTool<{ publicId: string; name?: string; colourCode?: string }, LabelData>({
   name: 'label.update',
-  description: 'Update a label',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      publicId: { type: 'string' },
-      name: { type: 'string' },
-      colourCode: { type: 'string' },
-    },
-    required: ['publicId'],
+  description: 'Update the name and/or color of a label (the fields left out keep their current value).',
+  properties: { publicId: { type: 'string' }, name: { type: 'string' }, colourCode: { type: 'string' } },
+  required: ['publicId'],
+  run: async (client, input) => {
+    assertString(input.publicId, 'publicId');
+    assertOptionalString(input.name, 'name');
+    assertOptionalString(input.colourCode, 'colourCode');
+    // Kan's PUT requires both fields, so a partial update completes them from the current label.
+    const path = `${ROUTES.LABELS}/${input.publicId}`;
+    const current =
+      input.name === undefined || input.colourCode === undefined
+        ? await client.request<LabelData>(path)
+        : undefined;
+    return client.request<LabelData>(path, {
+      method: 'PUT',
+      body: JSON.stringify({
+        name: input.name ?? current?.name,
+        colourCode: input.colourCode ?? current?.colourCode ?? '#000000',
+      }),
+    });
   },
-  handler: async (client: KanClient, input: LabelUpdateInput): Promise<ToolResult<Label>> => {
-    try {
-      assertString(input.publicId, 'publicId');
-      assertOptionalString(input.name, 'name');
-      assertOptionalString(input.colourCode, 'colourCode');
-      const body: Record<string, unknown> = {};
-      if (input.name !== undefined) body.name = input.name;
-      if (input.colourCode !== undefined) body.colourCode = input.colourCode;
-      const data = await client.request<Label>(`${ROUTES.LABELS}/${input.publicId}`, {
-        method: 'PATCH',
-        body: JSON.stringify(body),
-      });
-      return success(data);
-    } catch (err) {
-      return error(toMcpError(err).message);
-    }
-  },
-};
+});
 
-export const labelDeleteTool: Tool<LabelDeleteInput, { success: boolean }> = {
+export const labelDeleteTool = defineTool<{ publicId: string }, unknown>({
   name: 'label.delete',
-  description: 'Delete a label',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      publicId: { type: 'string' },
-    },
-    required: ['publicId'],
+  description: 'Delete a label.',
+  properties: { publicId: { type: 'string' } },
+  required: ['publicId'],
+  run: async (client, input) => {
+    assertString(input.publicId, 'publicId');
+    return client.request(`${ROUTES.LABELS}/${input.publicId}`, { method: 'DELETE' });
   },
-  handler: async (client: KanClient, input: LabelDeleteInput): Promise<ToolResult<{ success: boolean }>> => {
-    try {
-      assertString(input.publicId, 'publicId');
-      await client.request(`${ROUTES.LABELS}/${input.publicId}`, {
-        method: 'DELETE',
-      });
-      return success({ success: true });
-    } catch (err) {
-      return error(toMcpError(err).message);
-    }
-  },
-};
+});

@@ -1,112 +1,44 @@
-import { KanClient } from '../client';
-import { List, ToolResult, ROUTES } from '../types';
-import { success, error, assertString, assertOptionalString } from '../utils';
-import { toMcpError } from '../errors';
+import { ROUTES } from '../types';
+import { assertString, assertOptionalString } from '../utils';
+import { defineTool } from './tool';
 
-interface Tool<TInput = unknown, TOutput = unknown> {
-  name: string;
-  description: string;
-  inputSchema: {
-    type: 'object';
-    properties: Record<string, unknown>;
-    required: string[];
-  };
-  handler: (client: KanClient, input: TInput) => Promise<ToolResult<TOutput>>;
-}
-
-interface ListCreateInput {
-  boardPublicId: string;
-  name: string;
-}
-
-interface ListUpdateInput {
-  publicId: string;
-  name?: string;
-  index?: number;
-}
-
-interface ListDeleteInput {
-  publicId: string;
-}
-
-export const listCreateTool: Tool<ListCreateInput, List> = {
+export const listCreateTool = defineTool<{ boardPublicId: string; name: string }, unknown>({
   name: 'list.create',
-  description: 'Create a new list',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      boardPublicId: { type: 'string' },
-      name: { type: 'string' },
-    },
-    required: ['boardPublicId', 'name'],
+  description: 'Create a list (column) in a board.',
+  properties: { boardPublicId: { type: 'string' }, name: { type: 'string' } },
+  required: ['boardPublicId', 'name'],
+  run: async (client, input) => {
+    assertString(input.boardPublicId, 'boardPublicId');
+    assertString(input.name, 'name');
+    return client.request(ROUTES.LISTS, {
+      method: 'POST',
+      body: JSON.stringify({ boardPublicId: input.boardPublicId, name: input.name }),
+    });
   },
-  handler: async (client: KanClient, input: ListCreateInput): Promise<ToolResult<List>> => {
-    try {
-      assertString(input.boardPublicId, 'boardPublicId');
-      assertString(input.name, 'name');
-      const data = await client.request<List>(ROUTES.LISTS, {
-        method: 'POST',
-        body: JSON.stringify({
-          boardPublicId: input.boardPublicId,
-          name: input.name,
-        }),
-      });
-      return success(data);
-    } catch (err) {
-      return error(toMcpError(err).message);
-    }
-  },
-};
+});
 
-export const listUpdateTool: Tool<ListUpdateInput, List> = {
+export const listUpdateTool = defineTool<{ publicId: string; name?: string; index?: number }, unknown>({
   name: 'list.update',
-  description: 'Update a list',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      publicId: { type: 'string' },
-      name: { type: 'string' },
-      index: { type: 'number' },
-    },
-    required: ['publicId'],
+  description: 'Rename a list or change its position (index) in the board.',
+  properties: { publicId: { type: 'string' }, name: { type: 'string' }, index: { type: 'number' } },
+  required: ['publicId'],
+  run: async (client, input) => {
+    assertString(input.publicId, 'publicId');
+    assertOptionalString(input.name, 'name');
+    const body: Record<string, unknown> = {};
+    if (input.name !== undefined) body.name = input.name;
+    if (input.index !== undefined) body.index = input.index;
+    return client.request(`${ROUTES.LISTS}/${input.publicId}`, { method: 'PUT', body: JSON.stringify(body) });
   },
-  handler: async (client: KanClient, input: ListUpdateInput): Promise<ToolResult<List>> => {
-    try {
-      assertString(input.publicId, 'publicId');
-      assertOptionalString(input.name, 'name');
-      const body: Record<string, unknown> = {};
-      if (input.name !== undefined) body.name = input.name;
-      if (input.index !== undefined) body.index = input.index;
-      const data = await client.request<List>(`${ROUTES.LISTS}/${input.publicId}`, {
-        method: 'PATCH',
-        body: JSON.stringify(body),
-      });
-      return success(data);
-    } catch (err) {
-      return error(toMcpError(err).message);
-    }
-  },
-};
+});
 
-export const listDeleteTool: Tool<ListDeleteInput, { success: boolean }> = {
+export const listDeleteTool = defineTool<{ publicId: string }, unknown>({
   name: 'list.delete',
-  description: 'Delete a list',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      publicId: { type: 'string' },
-    },
-    required: ['publicId'],
+  description: 'Delete a list.',
+  properties: { publicId: { type: 'string' } },
+  required: ['publicId'],
+  run: async (client, input) => {
+    assertString(input.publicId, 'publicId');
+    return client.request(`${ROUTES.LISTS}/${input.publicId}`, { method: 'DELETE' });
   },
-  handler: async (client: KanClient, input: ListDeleteInput): Promise<ToolResult<{ success: boolean }>> => {
-    try {
-      assertString(input.publicId, 'publicId');
-      await client.request(`${ROUTES.LISTS}/${input.publicId}`, {
-        method: 'DELETE',
-      });
-      return success({ success: true });
-    } catch (err) {
-      return error(toMcpError(err).message);
-    }
-  },
-};
+});

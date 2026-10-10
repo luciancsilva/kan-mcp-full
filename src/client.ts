@@ -8,6 +8,34 @@ function debug(message: string, ...args: unknown[]): void {
   }
 }
 
+/** Extracts the message Kan puts in its error body (and field errors from validation failures). */
+async function readErrorDetail(response: Response): Promise<string | undefined> {
+  let text: string;
+  try {
+    text = (await response.text()).trim();
+  } catch {
+    return undefined;
+  }
+  if (!text) return undefined;
+  try {
+    const body = JSON.parse(text) as {
+      message?: unknown;
+      data?: { zodError?: { fieldErrors?: Record<string, string[]> } | null };
+    };
+    const parts: string[] = [];
+    if (typeof body.message === 'string') parts.push(body.message);
+    const fields = body.data?.zodError?.fieldErrors;
+    if (fields) {
+      const list = Object.entries(fields).map(([k, v]) => `${k}: ${v.join(', ')}`);
+      if (list.length) parts.push(`(${list.join('; ')})`);
+    }
+    if (parts.length) return parts.join(' ');
+  } catch {
+    // not JSON: fall through to the raw text
+  }
+  return text.slice(0, 300);
+}
+
 export class KanClient {
   private readonly apiKey: string;
   private readonly baseUrl: string;
@@ -54,7 +82,11 @@ export class KanClient {
         debug(`Response: ${response.status} ${response.statusText}`);
 
         if (!response.ok) {
-          throw KanApiError.fromHttpStatus(response.status, response.statusText);
+          const detail = await readErrorDetail(response);
+          throw KanApiError.fromHttpStatus(
+            response.status,
+            detail ? `${response.statusText}: ${detail}` : response.statusText
+          );
         }
 
         const data = await response.json() as T;
@@ -66,7 +98,7 @@ export class KanClient {
         if (error instanceof Error && error.name === 'AbortError') {
           debug(`Timeout after ${timeout}ms for ${path}`);
           lastError = new Error(`Request timeout after ${timeout}ms`);
-        } else if (attempt < maxRetries && this.isRetryableError(error)) {
+        } else if (attempt < maxRetries && this.isRetryableError(error, options?.method)) {
           debug(`Retryable error, retrying: ${error}`);
           lastError = error as Error;
           const delay = Math.min(1000 * Math.pow(2, attempt), 10000);
@@ -86,12 +118,18 @@ export class KanClient {
     throw lastError || new Error('Request failed');
   }
 
-  private isRetryableError(error: unknown): boolean {
+  /**
+   * POST and PATCH are not idempotent: after a 5xx or a dropped connection the server may already have
+   * applied the change, and a retry would duplicate it (two cards, two comments). They are only retried
+   * on 429, where the request was refused before being processed.
+   */
+  private isRetryableError(error: unknown, method = 'GET'): boolean {
+    const idempotent = !['POST', 'PATCH'].includes(method.toUpperCase());
     if (error instanceof KanApiError) {
-      return error.status >= 500 || error.status === 429;
+      return error.status === 429 || (idempotent && error.status >= 500);
     }
     if (error instanceof TypeError) {
-      return true;
+      return idempotent;
     }
     return false;
   }

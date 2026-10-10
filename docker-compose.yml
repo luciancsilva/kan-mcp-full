@@ -1,0 +1,38 @@
+# kan-mcp-full as a service. Talks to any Kan instance through its URL.
+#
+#   cp .env.example .env     # fill KAN_API_KEY, KAN_API_BASE_URL and MCP_AUTH_TOKEN
+#   docker compose pull      # or: docker compose build
+#   docker compose up -d
+#
+# The MCP endpoint is http://127.0.0.1:3333/mcp (Streamable HTTP, header "Authorization: Bearer <MCP_AUTH_TOKEN>").
+# The port is published on the loopback only: put a reverse proxy with TLS in front to expose it.
+name: kan-mcp-full
+
+services:
+  kan-mcp:
+    image: ghcr.io/luciancsilva/kan-mcp-full:latest
+    build: .
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${MCP_PUBLISH_PORT:-3333}:3333"
+    environment:
+      KAN_API_KEY: ${KAN_API_KEY:?set KAN_API_KEY in .env}
+      KAN_API_BASE_URL: ${KAN_API_BASE_URL:?set KAN_API_BASE_URL in .env, e.g. https://kan.example.com/api/v1}
+      MCP_AUTH_TOKEN: ${MCP_AUTH_TOKEN:?set MCP_AUTH_TOKEN in .env (at least 16 characters)}
+      KAN_MCP_ALLOW_PRIVATE_URLS: ${KAN_MCP_ALLOW_PRIVATE_URLS:-false}
+    volumes:
+      # Files the model may attach with filePath (read only) and where attachment.download saves.
+      - ${KAN_MCP_UPLOAD_DIR:-./uploads}:/data/uploads:ro
+      - ${KAN_MCP_DOWNLOAD_DIR:-./downloads}:/data/downloads
+    # Must own the download folder on the host (default: uid/gid 1000, the "bun" user of the image).
+    user: "${MCP_UID:-1000}:${MCP_GID:-1000}"
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    # Lets the container reach a Kan published on the Docker host (KAN_API_BASE_URL=http://host.docker.internal:3000/api/v1).
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

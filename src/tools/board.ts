@@ -1,282 +1,239 @@
-import { KanClient } from '../client';
-import { Board, Visibility, ToolResult, ROUTES } from '../types';
-import { success, error, assertString, assertOptionalString } from '../utils';
-import { toMcpError } from '../errors';
-
-interface Tool<TInput = unknown, TOutput = unknown> {
-  name: string;
-  description: string;
-  inputSchema: {
-    type: 'object';
-    properties: Record<string, unknown>;
-    required: string[];
-  };
-  handler: (client: KanClient, input: TInput) => Promise<ToolResult<TOutput>>;
-}
-
-interface BoardListInput {
-  workspacePublicId?: string;
-  visibility?: Visibility;
-}
-
-interface BoardCreateInput {
-  workspacePublicId: string;
-  name: string;
-  slug: string;
-  visibility: Visibility;
-}
-
-interface BoardGetByIdInput {
-  publicId: string;
-  members?: string[];
-  labels?: string[];
-  lists?: string[];
-  dueDateFilters?: DueDateFilter[];
-  type?: 'regular' | 'template';
-}
-
-interface BoardGetBySlugInput {
-  workspacePublicId: string;
-  slug: string;
-  members?: string[];
-  labels?: string[];
-  lists?: string[];
-  dueDateFilters?: DueDateFilter[];
-  type?: 'regular' | 'template';
-}
-
-interface BoardUpdateInput {
-  publicId: string;
-  name?: string;
-  visibility?: Visibility;
-}
-
-interface BoardDeleteInput {
-  publicId: string;
-}
-
-interface BoardCheckSlugInput {
-  workspacePublicId: string;
-  slug: string;
-}
+import { ROUTES, VISIBILITY, type Visibility } from '../types';
+import { assertString, assertOptionalString } from '../utils';
+import { defineTool, appendArray, withQuery } from './tool';
 
 export const DUE_DATE_FILTERS = ['overdue', 'today', 'tomorrow', 'next-week', 'next-month', 'no-due-date'] as const;
 export type DueDateFilter = (typeof DUE_DATE_FILTERS)[number];
+type BoardType = 'regular' | 'template';
 
-export const boardListTool: Tool<BoardListInput, Board[]> = {
+const filterProperties = {
+  members: { type: 'array', items: { type: 'string' }, description: 'Only cards with these members (workspace member public IDs).' },
+  labels: { type: 'array', items: { type: 'string' }, description: 'Only cards with these labels.' },
+  lists: { type: 'array', items: { type: 'string' }, description: 'Only these lists.' },
+  dueDateFilters: { type: 'array', items: { type: 'string', enum: [...DUE_DATE_FILTERS] } },
+};
+
+interface BoardFilters {
+  members?: string[];
+  labels?: string[];
+  lists?: string[];
+  dueDateFilters?: DueDateFilter[];
+}
+
+function filterParams(input: BoardFilters & { type?: BoardType }): URLSearchParams {
+  const params = new URLSearchParams();
+  appendArray(params, 'members', input.members);
+  appendArray(params, 'labels', input.labels);
+  appendArray(params, 'lists', input.lists);
+  appendArray(params, 'dueDateFilters', input.dueDateFilters);
+  if (input.type) params.set('type', input.type);
+  return params;
+}
+
+export const boardListTool = defineTool<
+  { workspacePublicId: string; type?: BoardType; archived?: boolean },
+  unknown
+>({
   name: 'board.list',
-  description: 'Get all boards',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      workspacePublicId: { type: 'string' },
-      visibility: { type: 'string', enum: ['public', 'private'] },
-    },
-    required: [],
+  description: 'List the boards of a workspace, with their lists and labels.',
+  properties: {
+    workspacePublicId: { type: 'string' },
+    type: { type: 'string', enum: ['regular', 'template'] },
+    archived: { type: 'boolean' },
   },
-  handler: async (client: KanClient, input: BoardListInput): Promise<ToolResult<Board[]>> => {
-    try {
-      const queryParams = new URLSearchParams();
-      if (input.workspacePublicId) queryParams.set('workspacePublicId', input.workspacePublicId);
-      if (input.visibility) queryParams.set('visibility', input.visibility);
-      const query = queryParams.toString();
-      const path = `${ROUTES.BOARDS}${query ? `?${query}` : ''}`;
-      const data = await client.request<Board[]>(path);
-      return success(data);
-    } catch (err) {
-      return error(toMcpError(err).message);
-    }
+  required: ['workspacePublicId'],
+  run: async (client, input) => {
+    assertString(input.workspacePublicId, 'workspacePublicId');
+    const params = new URLSearchParams();
+    if (input.type) params.set('type', input.type);
+    if (input.archived !== undefined) params.set('archived', String(input.archived));
+    return client.request(withQuery(`${ROUTES.WORKSPACES}/${input.workspacePublicId}/boards`, params));
   },
-};
+});
 
-export const boardCreateTool: Tool<BoardCreateInput, Board> = {
-  name: 'board.create',
-  description: 'Create a new board',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      workspacePublicId: { type: 'string' },
-      name: { type: 'string' },
-      slug: { type: 'string' },
-      visibility: { type: 'string', enum: ['public', 'private'] },
-    },
-    required: ['workspacePublicId', 'name', 'slug', 'visibility'],
-  },
-  handler: async (client: KanClient, input: BoardCreateInput): Promise<ToolResult<Board>> => {
-    try {
-      assertString(input.workspacePublicId, 'workspacePublicId');
-      assertString(input.name, 'name');
-      assertString(input.slug, 'slug');
-      assertString(input.visibility, 'visibility');
-      const data = await client.request<Board>(ROUTES.BOARDS, {
-        method: 'POST',
-        body: JSON.stringify({
-          workspacePublicId: input.workspacePublicId,
-          name: input.name,
-          slug: input.slug,
-          visibility: input.visibility,
-        }),
-      });
-      return success(data);
-    } catch (err) {
-      return error(toMcpError(err).message);
-    }
-  },
-};
-
-export const boardGetByIdTool: Tool<BoardGetByIdInput, Board> = {
-  name: 'board.getById',
-  description: 'Get board by public ID',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      publicId: { type: 'string' },
-      members: { type: 'array', items: { type: 'string' } },
-      labels: { type: 'array', items: { type: 'string' } },
-      lists: { type: 'array', items: { type: 'string' } },
-      dueDateFilters: { type: 'array', items: { type: 'string', enum: ['overdue', 'today', 'tomorrow', 'next-week', 'next-month', 'no-due-date'] } },
-      type: { type: 'string', enum: ['regular', 'template'] },
-    },
-    required: ['publicId'],
-  },
-  handler: async (client: KanClient, input: BoardGetByIdInput): Promise<ToolResult<Board>> => {
-    try {
-      assertString(input.publicId, 'publicId');
-      const queryParams = new URLSearchParams();
-      if (input.members?.length) queryParams.set('members', input.members.join(','));
-      if (input.labels?.length) queryParams.set('labels', input.labels.join(','));
-      if (input.lists?.length) queryParams.set('lists', input.lists.join(','));
-      if (input.dueDateFilters?.length) queryParams.set('dueDateFilters', input.dueDateFilters.join(','));
-      if (input.type) queryParams.set('type', input.type);
-      const query = queryParams.toString();
-      const path = `${ROUTES.BOARDS}/${input.publicId}${query ? `?${query}` : ''}`;
-      const data = await client.request<Board>(path);
-      return success(data);
-    } catch (err) {
-      return error(toMcpError(err).message);
-    }
-  },
-};
-
-export const boardGetBySlugTool: Tool<BoardGetBySlugInput, Board> = {
-  name: 'board.getBySlug',
-  description: 'Get board by slug',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      workspacePublicId: { type: 'string' },
-      slug: { type: 'string' },
-      members: { type: 'array', items: { type: 'string' } },
-      labels: { type: 'array', items: { type: 'string' } },
-      lists: { type: 'array', items: { type: 'string' } },
-      dueDateFilters: { type: 'array', items: { type: 'string', enum: ['overdue', 'today', 'tomorrow', 'next-week', 'next-month', 'no-due-date'] } },
-      type: { type: 'string', enum: ['regular', 'template'] },
-    },
-    required: ['workspacePublicId', 'slug'],
-  },
-  handler: async (client: KanClient, input: BoardGetBySlugInput): Promise<ToolResult<Board>> => {
-    try {
-      assertString(input.workspacePublicId, 'workspacePublicId');
-      assertString(input.slug, 'slug');
-      const queryParams = new URLSearchParams({
-        workspacePublicId: input.workspacePublicId,
-        slug: input.slug,
-      });
-      if (input.members?.length) queryParams.set('members', input.members.join(','));
-      if (input.labels?.length) queryParams.set('labels', input.labels.join(','));
-      if (input.lists?.length) queryParams.set('lists', input.lists.join(','));
-      if (input.dueDateFilters?.length) queryParams.set('dueDateFilters', input.dueDateFilters.join(','));
-      if (input.type) queryParams.set('type', input.type);
-      const data = await client.request<Board>(`${ROUTES.BOARDS}/slug?${queryParams}`);
-      return success(data);
-    } catch (err) {
-      return error(toMcpError(err).message);
-    }
-  },
-};
-
-export const boardUpdateTool: Tool<BoardUpdateInput, Board> = {
-  name: 'board.update',
-  description: 'Update a board',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      publicId: { type: 'string' },
-      name: { type: 'string' },
-      visibility: { type: 'string', enum: ['public', 'private'] },
-    },
-    required: ['publicId'],
-  },
-  handler: async (client: KanClient, input: BoardUpdateInput): Promise<ToolResult<Board>> => {
-    try {
-      assertString(input.publicId, 'publicId');
-      assertOptionalString(input.name, 'name');
-      assertOptionalString(input.visibility, 'visibility');
-      const body: Record<string, unknown> = {};
-      if (input.name !== undefined) body.name = input.name;
-      if (input.visibility !== undefined) body.visibility = input.visibility;
-      const data = await client.request<Board>(`${ROUTES.BOARDS}/${input.publicId}`, {
-        method: 'PATCH',
-        body: JSON.stringify(body),
-      });
-      return success(data);
-    } catch (err) {
-      return error(toMcpError(err).message);
-    }
-  },
-};
-
-export const boardDeleteTool: Tool<BoardDeleteInput, { success: boolean }> = {
-  name: 'board.delete',
-  description: 'Delete a board',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      publicId: { type: 'string' },
-    },
-    required: ['publicId'],
-  },
-  handler: async (client: KanClient, input: BoardDeleteInput): Promise<ToolResult<{ success: boolean }>> => {
-    try {
-      assertString(input.publicId, 'publicId');
-      await client.request(`${ROUTES.BOARDS}/${input.publicId}`, {
-        method: 'DELETE',
-      });
-      return success({ success: true });
-    } catch (err) {
-      return error(toMcpError(err).message);
-    }
-  },
-};
-
-export const boardCheckSlugAvailabilityTool: Tool<BoardCheckSlugInput, { available: boolean }> = {
-  name: 'board.checkSlugAvailability',
-  description: 'Check if a board slug is available',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      workspacePublicId: { type: 'string' },
-      slug: { type: 'string' },
-    },
-    required: ['workspacePublicId', 'slug'],
-  },
-  handler: async (
-    client: KanClient,
-    input: BoardCheckSlugInput
-  ): Promise<ToolResult<{ available: boolean }>> => {
-    try {
-      assertString(input.workspacePublicId, 'workspacePublicId');
-      assertString(input.slug, 'slug');
-      const queryParams = new URLSearchParams({
-        workspacePublicId: input.workspacePublicId,
-        slug: input.slug,
-      });
-      const data = await client.request<{ available: boolean }>(
-        `${ROUTES.BOARDS}/slug-available?${queryParams}`
+export const boardFindByNameTool = defineTool<{ workspacePublicId: string; name: string }, unknown>({
+  name: 'board.findByName',
+  description: 'Find a board by name (case-insensitive) inside a workspace.',
+  properties: { workspacePublicId: { type: 'string' }, name: { type: 'string' } },
+  required: ['workspacePublicId', 'name'],
+  run: async (client, input) => {
+    assertString(input.workspacePublicId, 'workspacePublicId');
+    assertString(input.name, 'name');
+    const boards = await client.request<{ name: string }[]>(
+      `${ROUTES.WORKSPACES}/${input.workspacePublicId}/boards`
+    );
+    const found = boards.find((b) => b.name.toLowerCase() === input.name.toLowerCase());
+    if (!found) {
+      throw new Error(
+        `No board found with name "${input.name}". Available boards: ${boards.map((b) => b.name).join(', ')}`
       );
-      return success(data);
-    } catch (err) {
-      return error(toMcpError(err).message);
     }
+    return found;
   },
-};
+});
+
+export const boardCreateTool = defineTool<
+  {
+    workspacePublicId: string;
+    name: string;
+    lists?: string[];
+    labels?: string[];
+    type?: BoardType;
+    sourceBoardPublicId?: string;
+    slug?: string;
+    visibility?: Visibility;
+  },
+  unknown
+>({
+  name: 'board.create',
+  description:
+    'Create a board in a workspace, optionally with initial lists and labels (names) or from a template board (sourceBoardPublicId). slug and visibility are applied right after creation.',
+  properties: {
+    workspacePublicId: { type: 'string' },
+    name: { type: 'string' },
+    lists: { type: 'array', items: { type: 'string' }, description: 'Names of the initial lists.' },
+    labels: { type: 'array', items: { type: 'string' }, description: 'Names of the initial labels.' },
+    type: { type: 'string', enum: ['regular', 'template'] },
+    sourceBoardPublicId: { type: 'string' },
+    slug: { type: 'string' },
+    visibility: { type: 'string', enum: [...VISIBILITY] },
+  },
+  required: ['workspacePublicId', 'name'],
+  run: async (client, input) => {
+    assertString(input.workspacePublicId, 'workspacePublicId');
+    assertString(input.name, 'name');
+    assertOptionalString(input.slug, 'slug');
+    const body: Record<string, unknown> = {
+      name: input.name,
+      lists: input.lists ?? [],
+      labels: input.labels ?? [],
+    };
+    if (input.type) body.type = input.type;
+    if (input.sourceBoardPublicId) body.sourceBoardPublicId = input.sourceBoardPublicId;
+    const created = await client.request<{ publicId: string; name: string }>(
+      `${ROUTES.WORKSPACES}/${input.workspacePublicId}/boards`,
+      { method: 'POST', body: JSON.stringify(body) }
+    );
+    const wanted: Record<string, unknown> = {};
+    if (input.slug !== undefined) wanted.slug = input.slug;
+    if (input.visibility !== undefined) wanted.visibility = input.visibility;
+    if (Object.keys(wanted).length === 0) return created;
+
+    // Kan generates a slug from the name and rejects re-setting a slug a board already has,
+    // so only the fields that differ from the created board are updated.
+    const current = await client.request<{ slug?: string; visibility?: string }>(
+      `${ROUTES.BOARDS}/${created.publicId}`
+    );
+    const changes = Object.fromEntries(
+      Object.entries(wanted).filter(([key, value]) => (current as Record<string, unknown>)[key] !== value)
+    );
+    if (Object.keys(changes).length > 0) {
+      try {
+        await client.request(`${ROUTES.BOARDS}/${created.publicId}`, {
+          method: 'PUT',
+          body: JSON.stringify(changes),
+        });
+      } catch (err) {
+        throw new Error(
+          `Board created (publicId ${created.publicId}) but applying ${Object.keys(changes).join(' and ')} failed: ${err instanceof Error ? err.message : String(err)}`
+        );
+      }
+    }
+    return { ...created, ...wanted };
+  },
+});
+
+export const boardGetByIdTool = defineTool<BoardFilters & { publicId: string; type?: BoardType }, unknown>({
+  name: 'board.getById',
+  description:
+    'Get a board by public ID with its lists and cards. Optional filters narrow the cards (by member, label, list or due date).',
+  properties: {
+    publicId: { type: 'string' },
+    ...filterProperties,
+    type: { type: 'string', enum: ['regular', 'template'] },
+  },
+  required: ['publicId'],
+  run: async (client, input) => {
+    assertString(input.publicId, 'publicId');
+    return client.request(withQuery(`${ROUTES.BOARDS}/${input.publicId}`, filterParams(input)));
+  },
+});
+
+export const boardGetBySlugTool = defineTool<
+  BoardFilters & { workspaceSlug: string; boardSlug: string },
+  unknown
+>({
+  name: 'board.getBySlug',
+  description: 'Get a PUBLIC board by workspace slug and board slug, with its lists and cards (Kan returns nothing for private boards; use board.getById for those). Accepts the same card filters as board.getById.',
+  properties: {
+    workspaceSlug: { type: 'string' },
+    boardSlug: { type: 'string' },
+    ...filterProperties,
+  },
+  required: ['workspaceSlug', 'boardSlug'],
+  run: async (client, input) => {
+    assertString(input.workspaceSlug, 'workspaceSlug');
+    assertString(input.boardSlug, 'boardSlug');
+    const path = `${ROUTES.WORKSPACES}/${encodeURIComponent(input.workspaceSlug)}/boards/${encodeURIComponent(input.boardSlug)}`;
+    const board = await client.request<unknown>(withQuery(path, filterParams(input)));
+    if (board === null) {
+      throw new Error(
+        `Board "${input.boardSlug}" not found in workspace "${input.workspaceSlug}", or it is private. Kan only serves public boards by slug; use board.getById for private ones.`
+      );
+    }
+    return board;
+  },
+});
+
+export const boardUpdateTool = defineTool<
+  {
+    publicId: string;
+    name?: string;
+    slug?: string;
+    visibility?: Visibility;
+    favorite?: boolean;
+    isArchived?: boolean;
+  },
+  unknown
+>({
+  name: 'board.update',
+  description: 'Update a board: name, slug, visibility, favorite or archived state.',
+  properties: {
+    publicId: { type: 'string' },
+    name: { type: 'string' },
+    slug: { type: 'string' },
+    visibility: { type: 'string', enum: [...VISIBILITY] },
+    favorite: { type: 'boolean' },
+    isArchived: { type: 'boolean' },
+  },
+  required: ['publicId'],
+  run: async (client, input) => {
+    assertString(input.publicId, 'publicId');
+    const { publicId, ...fields } = input;
+    return client.request(`${ROUTES.BOARDS}/${publicId}`, { method: 'PUT', body: JSON.stringify(fields) });
+  },
+});
+
+export const boardDeleteTool = defineTool<{ publicId: string }, unknown>({
+  name: 'board.delete',
+  description: 'Delete a board.',
+  properties: { publicId: { type: 'string' } },
+  required: ['publicId'],
+  run: async (client, input) => {
+    assertString(input.publicId, 'publicId');
+    return client.request(`${ROUTES.BOARDS}/${input.publicId}`, { method: 'DELETE' });
+  },
+});
+
+export const boardCheckSlugAvailabilityTool = defineTool<{ boardPublicId: string; slug: string }, unknown>({
+  name: 'board.checkSlugAvailability',
+  description: 'Check whether a slug can be used for the given board (isReserved tells if it is reserved).',
+  properties: { boardPublicId: { type: 'string' }, slug: { type: 'string' } },
+  required: ['boardPublicId', 'slug'],
+  run: async (client, input) => {
+    assertString(input.boardPublicId, 'boardPublicId');
+    assertString(input.slug, 'slug');
+    const params = new URLSearchParams({ boardSlug: input.slug });
+    return client.request(withQuery(`${ROUTES.BOARDS}/${input.boardPublicId}/check-slug-availability`, params));
+  },
+});

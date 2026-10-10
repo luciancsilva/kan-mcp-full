@@ -269,6 +269,56 @@ describe('KanClient', () => {
       expect(attempts).toBe(1);
     });
 
+    test('does not retry a POST after a 5xx (it could duplicate the change)', async () => {
+      const client = new KanClient(TEST_API_KEY, TEST_BASE_URL, 5000, 2);
+      let calls = 0;
+      globalThis.fetch = async () => {
+        calls++;
+        return new Response('', { status: 503, statusText: 'Service Unavailable' }) as Response;
+      };
+      await expect(client.request('/test', { method: 'POST', body: '{}' })).rejects.toBeInstanceOf(KanApiError);
+      expect(calls).toBe(1);
+    });
+
+    test('does not retry a POST after a network error', async () => {
+      const client = new KanClient(TEST_API_KEY, TEST_BASE_URL, 5000, 2);
+      let calls = 0;
+      globalThis.fetch = async () => {
+        calls++;
+        throw new TypeError('fetch failed');
+      };
+      await expect(client.request('/test', { method: 'POST', body: '{}' })).rejects.toThrow('fetch failed');
+      expect(calls).toBe(1);
+    });
+
+    test('retries a POST on 429, which was refused before being processed', async () => {
+      const client = new KanClient(TEST_API_KEY, TEST_BASE_URL, 5000, 1);
+      let calls = 0;
+      globalThis.fetch = async () => {
+        calls++;
+        return calls === 1
+          ? (new Response('', { status: 429, statusText: 'Too Many Requests' }) as Response)
+          : (new Response(JSON.stringify({ ok: true }), { status: 200 }) as Response);
+      };
+      expect(await client.request('/test', { method: 'POST', body: '{}' })).toEqual({ ok: true });
+      expect(calls).toBe(2);
+    });
+
+    test('still retries PUT and DELETE on 5xx', async () => {
+      for (const method of ['PUT', 'DELETE']) {
+        const client = new KanClient(TEST_API_KEY, TEST_BASE_URL, 5000, 1);
+        let calls = 0;
+        globalThis.fetch = async () => {
+          calls++;
+          return calls === 1
+            ? (new Response('', { status: 503, statusText: 'Service Unavailable' }) as Response)
+            : (new Response(JSON.stringify({ ok: true }), { status: 200 }) as Response);
+        };
+        expect(await client.request('/test', { method })).toEqual({ ok: true });
+        expect(calls).toBe(2);
+      }
+    });
+
     test('retries on network TypeError', async () => {
       const client = new KanClient(TEST_API_KEY, TEST_BASE_URL, 5000, 2);
       let attempts = 0;

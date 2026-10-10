@@ -1,26 +1,40 @@
 {
-  "name": "kan-mcp",
-  "version": "0.1.7",
-  "description": "MCP server for Kan.bn API - exposes 40 tools for workspace, board, list, card, label, checklist, and comment management",
+  "name": "kan-mcp-full",
+  "version": "0.4.0",
+  "description": "MCP server for Kan.bn API - exposes 54 tools for workspace, member, board, list, card, label, checklist, comment, and attachment management",
+  "author": "Lucian Silva",
+  "license": "MIT",
   "main": "src/index.ts",
   "bin": {
-    "kan-mcp": "src/index.ts"
+    "kan-mcp-full": "src/index.ts"
   },
   "type": "module",
+  "files": [
+    "src",
+    "README.md",
+    "LICENSE",
+    "NOTICE",
+    ".env.example"
+  ],
   "keywords": [
+    "api",
+    "attachments",
+    "kan",
+    "kanban",
     "mcp",
     "model-context-protocol",
-    "kan",
-    "productivity",
-    "api"
+    "productivity"
   ],
-  "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/michaelruelas/kan-mcp"
+    "url": "git+https://github.com/luciancsilva/kan-mcp.git"
+  },
+  "homepage": "https://github.com/luciancsilva/kan-mcp#readme",
+  "bugs": {
+    "url": "https://github.com/luciancsilva/kan-mcp/issues"
   },
   "scripts": {
-    "build": "bun build src/index.ts --compile --outfile kan-mcp",
+    "build": "bun build src/index.ts --compile --outfile kan-mcp-full",
     "test": "bun test",
     "test:integration": "INTEGRATION_TEST=true bun test tests/integration"
   },
