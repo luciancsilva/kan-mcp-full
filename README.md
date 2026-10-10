@@ -10,7 +10,7 @@ Built with Bun + TypeScript.
 
 ## Overview
 
-kan-mcp exposes 43 tools across 8 domains for managing Kan.bn workspaces, plus MCP Resources for efficient read operations:
+kan-mcp exposes 44 tools across 8 domains for managing Kan.bn workspaces, plus MCP Resources for efficient read operations:
 
 | Domain     | Tools | Description                              |
 |------------|-------|------------------------------------------|
@@ -21,7 +21,7 @@ kan-mcp exposes 43 tools across 8 domains for managing Kan.bn workspaces, plus M
 | label      | 4     | Create and manage colored labels         |
 | checklist  | 6     | Checklist management with items          |
 | comment    | 3     | Card comments                            |
-| attachment | 3     | Add (file, URL or base64), list and remove card attachments |
+| attachment | 4     | Add (file, URL or base64), list, remove and download card attachments |
 | **Resources** | **3** | **Read-only URIs for efficient context loading** |
 
 ## Quick Start
@@ -74,9 +74,12 @@ export KAN_API_BASE_URL=https://kan.tools.pugcasa.com/api/v1
 | Variable | Description |
 |----------|-------------|
 | `KAN_MCP_UPLOAD_ROOT` | Directory that `filePath` may read from. `filePath` is disabled when unset. Symlinks that leave this directory are rejected. |
+| `KAN_MCP_DOWNLOAD_DIR` | Directory `attachment.download` saves files to. The tool is disabled when unset. |
 | `KAN_MCP_ALLOW_PRIVATE_URLS` | Set to `true` to let `url` point to private or internal addresses (blocked by default, including redirects). |
 
-Limits: 50 MB per file (Kan limit). `attachment.list` depends on `GET /cards/{id}` returning an `attachments` field and returns a clear error when it does not.
+Limits: 50 MB per file (Kan limit). `attachment.list` and `attachment.download` use the `attachments` field (with the storage `url`) returned by `GET /cards/{id}` and return a clear error when it is missing.
+
+Tested against Kan 0.6.0 (`ghcr.io/kanbn/kan:latest`) with an S3-compatible storage.
 
 ## Installation
 
@@ -208,6 +211,7 @@ checklist.deleteItem             # Delete checklist item
 attachment.add                   # Attach a file to a card (filePath, url or contentBase64)
 attachment.list                  # List attachments of a card
 attachment.remove                # Remove an attachment
+attachment.download              # Save an attachment to KAN_MCP_DOWNLOAD_DIR
 ```
 
 ### Comment Tools

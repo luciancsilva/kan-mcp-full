@@ -128,10 +128,10 @@ function decodedBase64Size(b64: string): number {
   return Math.floor((b64.length * 3) / 4) - padding;
 }
 
-async function readBodyWithLimit(response: Response): Promise<Uint8Array> {
+export async function readBodyWithLimit(response: Response, limit = MAX_ATTACHMENT_BYTES): Promise<Uint8Array> {
   const declared = Number(response.headers.get('content-length'));
-  if (Number.isFinite(declared) && declared > MAX_ATTACHMENT_BYTES) {
-    throw new Error(`file at url exceeds the ${MAX_ATTACHMENT_BYTES} byte limit`);
+  if (Number.isFinite(declared) && declared > limit) {
+    throw new Error(`file exceeds the ${limit} byte limit`);
   }
   if (!response.body) return new Uint8Array();
   const reader = response.body.getReader();
@@ -141,9 +141,9 @@ async function readBodyWithLimit(response: Response): Promise<Uint8Array> {
     const { done, value } = await reader.read();
     if (done) break;
     total += value.byteLength;
-    if (total > MAX_ATTACHMENT_BYTES) {
+    if (total > limit) {
       await reader.cancel();
-      throw new Error(`file at url exceeds the ${MAX_ATTACHMENT_BYTES} byte limit`);
+      throw new Error(`file exceeds the ${limit} byte limit`);
     }
     chunks.push(value);
   }

@@ -57,6 +57,7 @@ import {
   attachmentAddTool,
   attachmentListTool,
   attachmentRemoveTool,
+  attachmentDownloadTool,
 } from './attachment';
 import { serverHealthTool } from './server';
 
@@ -105,6 +106,7 @@ export const tools: any[] = [
   attachmentAddTool,
   attachmentListTool,
   attachmentRemoveTool,
+  attachmentDownloadTool,
   serverHealthTool,
 ];
 

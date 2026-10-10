@@ -1,0 +1,64 @@
+# Disposable Kan + Postgres + S3 (RustFS) stack for the attachment integration tests.
+# Uses the host network (Linux) so the presigned storage URLs work from both Kan and the tests.
+# Start with: scripts/integration-up.sh   Stop with: docker compose -f docker-compose.integration.yml down -v
+name: kan-mcp-it
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    network_mode: host
+    environment:
+      POSTGRES_DB: kan_db
+      POSTGRES_USER: kan
+      POSTGRES_PASSWORD: kanpass
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kan -d kan_db"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  storage:
+    image: rustfs/rustfs:latest
+    network_mode: host
+    user: root
+    command: ["/data"]
+    environment:
+      RUSTFS_ACCESS_KEY: kanaccess
+      RUSTFS_SECRET_KEY: kansecret12345
+    tmpfs:
+      - /data
+
+  migrate:
+    image: ghcr.io/kanbn/kan-migrate:latest
+    network_mode: host
+    environment:
+      POSTGRES_URL: postgresql://kan:kanpass@localhost:5432/kan_db
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  web:
+    image: ghcr.io/kanbn/kan:latest
+    network_mode: host
+    environment:
+      NEXT_PUBLIC_BASE_URL: http://localhost:3000
+      BETTER_AUTH_SECRET: 0123456789abcdef0123456789abcdef0123456789abcdef
+      BETTER_AUTH_TRUSTED_ORIGINS: http://localhost:3000
+      POSTGRES_URL: postgresql://kan:kanpass@localhost:5432/kan_db
+      NEXT_PUBLIC_ALLOW_CREDENTIALS: "true"
+      S3_REGION: us-east-1
+      S3_ENDPOINT: http://localhost:9000
+      S3_ACCESS_KEY_ID: kanaccess
+      S3_SECRET_ACCESS_KEY: kansecret12345
+      S3_FORCE_PATH_STYLE: "true"
+      NEXT_PUBLIC_ATTACHMENTS_BUCKET_NAME: kan-attachments
+      NEXT_PUBLIC_AVATAR_BUCKET_NAME: kan-avatars
+      NEXT_PUBLIC_STORAGE_URL: http://localhost:9000
+      NEXT_PUBLIC_STORAGE_DOMAIN: localhost
+      EMAIL_DISABLED: "true"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      storage:
+        condition: service_started

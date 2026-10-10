@@ -7,6 +7,7 @@ import {
   attachmentAddTool,
   attachmentListTool,
   attachmentRemoveTool,
+  attachmentDownloadTool,
 } from '../../src/tools/attachment';
 import { isPrivateAddress, resolveAttachmentSource } from '../../src/attachment-source';
 
@@ -48,6 +49,7 @@ afterEach(async () => {
   globalThis.fetch = originalFetch;
   delete process.env.KAN_MCP_UPLOAD_ROOT;
   delete process.env.KAN_MCP_ALLOW_PRIVATE_URLS;
+  delete process.env.KAN_MCP_DOWNLOAD_DIR;
   await rm(root, { recursive: true, force: true });
 });
 
@@ -283,5 +285,62 @@ describe('attachment.remove', () => {
     mockFetch(() => new Response('', { status: 404, statusText: 'Not Found' }));
     const result = await attachmentRemoveTool.handler(newClient(), { attachmentPublicId: 'nope' });
     expect(result.ok).toBe(false);
+  });
+});
+
+describe('attachment.download', () => {
+  const card = (extra: Record<string, unknown> = {}) => ({
+    publicId: 'card123456789',
+    attachments: [
+      { publicId: 'att000000001', originalFilename: 'relatório.txt', contentType: 'text/plain', size: 5, url: 'https://storage.test/f', ...extra },
+    ],
+  });
+
+  test('is disabled without KAN_MCP_DOWNLOAD_DIR', async () => {
+    mockFetch(() => json(card()));
+    const result = await attachmentDownloadTool.handler(newClient(), {
+      cardPublicId: 'card123456789',
+      attachmentPublicId: 'att000000001',
+    });
+    expect(result.ok).toBe(false);
+    expect((result as { error: string }).error).toContain('KAN_MCP_DOWNLOAD_DIR');
+  });
+
+  test('saves the file with a sanitized name and no Kan credentials', async () => {
+    const dir = join(root, 'downloads');
+    process.env.KAN_MCP_DOWNLOAD_DIR = dir;
+    mockFetch((url) => (url === 'https://storage.test/f' ? new Response('hello') : json(card())));
+    const result = await attachmentDownloadTool.handler(newClient(), {
+      cardPublicId: 'card123456789',
+      attachmentPublicId: 'att000000001',
+    });
+    expect(result.ok).toBe(true);
+    const data = (result as { data: { path: string; size: number } }).data;
+    expect(data.path).toBe(join(dir, 'att000000001-relat_rio.txt'));
+    expect(data.size).toBe(5);
+    expect(await Bun.file(data.path).text()).toBe('hello');
+    expect(calls[1]!.headers['Authorization']).toBeUndefined();
+  });
+
+  test('errors when the attachment is not on the card, deleted or has no url', async () => {
+    process.env.KAN_MCP_DOWNLOAD_DIR = join(root, 'downloads');
+    const run = async (c: unknown, id = 'att000000001') => {
+      mockFetch(() => json(c));
+      return attachmentDownloadTool.handler(newClient(), { cardPublicId: 'card123456789', attachmentPublicId: id });
+    };
+    expect((await run(card(), 'other')).ok).toBe(false);
+    expect((await run(card({ deletedAt: 'x' }))).ok).toBe(false);
+    expect((await run(card({ url: null }))).ok).toBe(false);
+  });
+
+  test('fails on storage errors', async () => {
+    process.env.KAN_MCP_DOWNLOAD_DIR = join(root, 'downloads');
+    mockFetch((url) => (url === 'https://storage.test/f' ? new Response('', { status: 403 }) : json(card())));
+    const result = await attachmentDownloadTool.handler(newClient(), {
+      cardPublicId: 'card123456789',
+      attachmentPublicId: 'att000000001',
+    });
+    expect(result.ok).toBe(false);
+    expect((result as { error: string }).error).toContain('403');
   });
 });

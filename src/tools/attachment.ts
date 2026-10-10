@@ -2,7 +2,9 @@ import { KanClient } from '../client';
 import { Attachment, Card, ToolResult, ROUTES, UploadUrlResponse } from '../types';
 import { success, error, assertString, assertOptionalString } from '../utils';
 import { toMcpError } from '../errors';
-import { resolveAttachmentSource, sanitizeFilename } from '../attachment-source';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { join, resolve } from 'node:path';
+import { MAX_ATTACHMENT_BYTES, readBodyWithLimit, resolveAttachmentSource, sanitizeFilename } from '../attachment-source';
 
 interface Tool<TInput = unknown, TOutput = unknown> {
   name: string;
@@ -186,6 +188,72 @@ export const attachmentRemoveTool: Tool<AttachmentRemoveInput, unknown> = {
         { method: 'DELETE' }
       );
       return success(data);
+    } catch (err) {
+      return error(toMcpError(err).message);
+    }
+  },
+};
+
+interface AttachmentDownloadInput {
+  cardPublicId: string;
+  attachmentPublicId: string;
+}
+
+interface AttachmentDownloadResult {
+  path: string;
+  filename: string;
+  contentType: string;
+  size: number;
+}
+
+export const attachmentDownloadTool: Tool<AttachmentDownloadInput, AttachmentDownloadResult> = {
+  name: 'attachment.download',
+  description:
+    'Download an attachment of a card to KAN_MCP_DOWNLOAD_DIR and return the saved path. Get the attachmentPublicId from attachment.list.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      cardPublicId: { type: 'string' },
+      attachmentPublicId: { type: 'string' },
+    },
+    required: ['cardPublicId', 'attachmentPublicId'],
+  },
+  handler: async (
+    client: KanClient,
+    input: AttachmentDownloadInput
+  ): Promise<ToolResult<AttachmentDownloadResult>> => {
+    try {
+      assertString(input.cardPublicId, 'cardPublicId');
+      assertString(input.attachmentPublicId, 'attachmentPublicId');
+      const dir = process.env.KAN_MCP_DOWNLOAD_DIR;
+      if (!dir) {
+        return error('attachment.download is disabled: set KAN_MCP_DOWNLOAD_DIR to the directory files are saved to');
+      }
+
+      const card = await client.request<Card>(`${ROUTES.CARDS}/${input.cardPublicId}`);
+      const attachment = card.attachments?.find(
+        (a) => a.publicId === input.attachmentPublicId && !a.deletedAt
+      );
+      if (!attachment) return error('Attachment not found on this card');
+      if (!attachment.url) return error('Kan did not return a download URL for this attachment');
+
+      // The URL points to the Kan storage (often an internal host), so no private-address block here.
+      const response = await fetch(attachment.url, { signal: AbortSignal.timeout(STORAGE_UPLOAD_TIMEOUT_MS) });
+      if (!response.ok) return error(`Download from storage failed (HTTP ${response.status})`);
+      const bytes = await readBodyWithLimit(response, MAX_ATTACHMENT_BYTES);
+
+      const filename = attachment.originalFilename ?? attachment.filename ?? 'attachment';
+      const target = resolve(dir);
+      await mkdir(target, { recursive: true });
+      const path = join(target, `${attachment.publicId}-${sanitizeFilename(filename)}`);
+      await writeFile(path, bytes);
+
+      return success({
+        path,
+        filename,
+        contentType: attachment.contentType ?? response.headers.get('content-type') ?? 'application/octet-stream',
+        size: bytes.byteLength,
+      });
     } catch (err) {
       return error(toMcpError(err).message);
     }

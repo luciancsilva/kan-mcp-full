@@ -168,3 +168,21 @@ Run with verbose output:
 ```bash
 INTEGRATION_TEST=true bun test tests/integration --reporter=verbose
 ```
+
+## Attachment tests against a local Kan (no account needed)
+
+`tests/integration/attachment.test.ts` runs against a disposable stack (Kan `latest`, Postgres and an
+S3-compatible storage) started with Docker. Linux only, because the compose file uses the host network.
+
+```bash
+./scripts/integration-up.sh          # starts the stack, creates user, API key, workspace, board and card
+set -a; . ./.env.integration; set +a # KAN_API_KEY, KAN_API_BASE_URL, KAN_TEST_CARD_ID
+INTEGRATION_TEST=true bun test tests/integration/attachment.test.ts
+docker compose -f docker-compose.integration.yml down -v   # tear down
+```
+
+Requirements: Docker Compose, `curl` >= 7.75 and `python3`. `.env.integration` is git-ignored.
+
+The tests cover add (file, base64), list, download (SHA-256 compared with the original), remove, the
+exact 50 MB limit (50 MB accepted, 50 MB + 1 byte rejected) and the error paths. Last verified against
+Kan 0.6.0.

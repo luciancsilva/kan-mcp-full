@@ -2,7 +2,7 @@
 
 ## Overview
 
-kan-mcp is a Model Context Protocol (MCP) server for the Kan.bn API. It exposes 43 tools across 8 domains: workspace, board, list, card, label, checklist, comment, and attachment.
+kan-mcp is a Model Context Protocol (MCP) server for the Kan.bn API. It exposes 44 tools across 8 domains: workspace, board, list, card, label, checklist, comment, and attachment.
 
 **Technology Stack:** Bun runtime, TypeScript (strict mode), @modelcontextprotocol/sdk
 
@@ -328,7 +328,7 @@ src/
 ├── errors.ts         # KanApiError, McpError, toMcpError
 ├── utils.ts          # Type guards, builders, assertions
 └── tools/
-    ├── mod.ts        # Aggregates all 43 tools
+    ├── mod.ts        # Aggregates all 44 tools
     ├── workspace.ts  # 8 workspace tools
     ├── board.ts      # 7 board tools
     ├── list.ts       # 3 list tools

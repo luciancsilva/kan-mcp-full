@@ -105,6 +105,8 @@ export interface Attachment {
   size?: number;
   createdAt?: string;
   deletedAt?: string | null;
+  /** Read URL returned by GET /cards/{id} (storage URL; no Kan credentials needed). */
+  url?: string | null;
 }
 
 /** Response of POST /cards/{id}/attachments/upload-url (presigned PUT, valid for 1h). */
