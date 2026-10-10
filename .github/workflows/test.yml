@@ -1,0 +1,38 @@
+name: Test
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+    branches: ['**']
+
+jobs:
+  test:
+    name: Test on Bun ${{ matrix.bun-version }}
+    strategy:
+      fail-fast: false
+      matrix:
+        bun-version: ['1.1.0', '1.1', 'latest']
+    runs-on: ubuntu-latest
+    steps:
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ matrix.bun-version }}
+      - uses: actions/checkout@v5
+      - run: bun install
+      - run: bun test
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - uses: actions/checkout@v5
+      - run: bun install
+      - run: bun run build
+      - name: Verify binary exists
+        run: test -f ./kan-mcp
+
+
