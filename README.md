@@ -123,11 +123,16 @@ Add this to your agent/IDE's MCP server configuration (use the absolute path of 
 The image runs the MCP over **Streamable HTTP** (`POST /mcp`) protected by a bearer token, so it can stay running next to your Kan and be used by n8n, agents or remote MCP clients. It talks to any Kan through its URL.
 
 ```bash
+git clone https://github.com/luciancsilva/kan-mcp && cd kan-mcp
 cp .env.example .env          # fill KAN_API_KEY, KAN_API_BASE_URL and MCP_AUTH_TOKEN (openssl rand -hex 32)
-docker compose pull           # image: ghcr.io/luciancsilva/kan-mcp-full:latest  (or: docker compose build)
-docker compose up -d
+mkdir -p uploads downloads && sudo chown 1000:1000 downloads
+docker compose up -d          # builds the image from the Dockerfile when the published one is not available
 curl http://127.0.0.1:3333/health      # {"status":"ok","version":"..."}
 ```
+
+To update later: `git pull && docker compose up -d --build`.
+
+To use the published image instead of building it (after `docker login ghcr.io`, see below): `docker compose pull && docker compose up -d`.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
