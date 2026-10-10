@@ -1,5 +1,9 @@
-Este projeto e um fork de https://github.com/michaelruelas/kan-mcp
-(licenca MIT, commit a30e32ede6cb585c6bbd284b732c374b329f60ef, 2026-04-13).
+kan-mcp-full is a fork of https://github.com/michaelruelas/kan-mcp
+(MIT license, commit a30e32ede6cb585c6bbd284b732c374b329f60ef, 2026-04-13).
 
-O codigo original e de seus autores. As alteracoes deste repositorio
-(ferramentas de anexo e correlatos) seguem a mesma licenca MIT.
+The original code belongs to its authors. The changes in this repository
+(attachment tools, alignment with the Kan 0.6.0 API, member and invite-link
+tools and the test suites) are distributed under the same MIT license, see LICENSE.
+
+The official Kan MCP server (kanbn/kan, AGPL-3.0) was only read for comparison;
+no code from it is included. Tools were written from the public OpenAPI of Kan.

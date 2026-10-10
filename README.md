@@ -1,4 +1,4 @@
-# kan-mcp
+# kan-mcp-full
 
 A Model Context Protocol (MCP) server that exposes the [Kan.bn](https://kan.bn) REST API as tools for AI assistants.
 
@@ -9,7 +9,7 @@ Built with Bun + TypeScript.
 
 ## Overview
 
-kan-mcp exposes 54 tools for managing Kan.bn workspaces, plus MCP Resources for efficient read operations. It follows the Kan REST API of **Kan 0.6.0** (tested against `ghcr.io/kanbn/kan:latest`).
+kan-mcp-full exposes 54 tools for managing Kan.bn workspaces, plus MCP Resources for efficient read operations. It follows the Kan REST API of **Kan 0.6.0** (tested against `ghcr.io/kanbn/kan:latest`).
 
 | Domain     | Tools | Description                              |
 |------------|-------|------------------------------------------|
@@ -40,7 +40,7 @@ bun run build
 
 ## Configuration
 
-kan-mcp requires a Kan.bn API key:
+kan-mcp-full requires a Kan.bn API key:
 
 ```bash
 export KAN_API_KEY=your_api_key_here
@@ -80,20 +80,24 @@ Tested against Kan 0.6.0 (`ghcr.io/kanbn/kan:latest`) with an S3-compatible stor
 
 ## Installation
 
-> This fork is **not** the `kan-mcp` package published on npm (that one is the original project, without attachments, and its tools target an older Kan API). Run it from this repository.
+> `kan-mcp-full` is a fork of `michaelruelas/kan-mcp` with attachments, the Kan 0.6.0 API fixes and the tools of the official Kan MCP. It is a different package from `kan-mcp` on npm (the original project, without attachments, with routes of an older Kan API).
+
+From the repository:
 
 ```bash
 git clone https://github.com/luciancsilva/kan-mcp
 cd kan-mcp
 bun install
-bun run build        # optional: creates a standalone ./kan-mcp binary
+bun run build        # optional: creates a standalone ./kan-mcp-full binary
 ```
+
+Once published to npm (`bun publish`), it runs without cloning: `bunx kan-mcp-full`.
 
 ## MCP Server Configuration
 
 > **Note:** The configuration format is the same for all agents/IDEs. Check your agent/IDE documentation for where to add this JSON.
 
-Add this to your agent/IDE's MCP server configuration (use the absolute path of your clone, or the built binary as `command` with no `args`):
+Add this to your agent/IDE's MCP server configuration (use the absolute path of your clone, or the built binary as `command` with no `args`; once published, `"command": "bunx", "args": ["kan-mcp-full"]` also works):
 
 ```json
 {
@@ -347,55 +351,37 @@ Tool: card.update
 Input: { "publicId": "card_xxx", "title": "Implement login (SSO)", "listPublicId": "lst_doing" }
 ```
 
-## Test Coverage
+## Tests
 
+```bash
+bun test                                   # unit tests, no Kan needed
+./scripts/integration-up.sh                # disposable Kan + Postgres + S3 (Docker, Linux)
+set -a; . ./.env.integration; set +a
+INTEGRATION_TEST=true bun test tests/integration
 ```
-------------------------|---------|---------|-------------------
-File                    | % Funcs | % Lines | Uncovered Line #s
-------------------------|---------|---------|-------------------
-All files               |   86.50 |   89.09 |
- src/client.ts          |   87.50 |  100.00 |
- src/errors.ts          |   40.00 |   48.78 | 1-7,11-12,17-29
- src/tools/board.ts     |  100.00 |  100.00 |
- src/tools/card.ts      |  100.00 |  100.00 |
- src/tools/checklist.ts |  100.00 |  100.00 |
- src/tools/comment.ts   |  100.00 |  100.00 |
- src/tools/label.ts     |  100.00 |  100.00 |
- src/tools/list.ts      |  100.00 |  100.00 |
- src/tools/server.ts    |  100.00 |   97.73 |
- src/tools/workspace.ts |  100.00 |  100.00 |
- src/types.ts           |  100.00 |  100.00 |
-------------------------|---------|---------|-------------------
-```
+
+- `tests/tools/api-contract.test.ts`: method, path and body each tool sends, plus input validation for every tool.
+- `tests/tools/flows.test.ts` and `attachment.test.ts`: tools that need several requests, error messages, security checks.
+- `tests/integration/`: every tool against a real Kan 0.6.0 (also verified with Cloudflare R2 storage). See `docs/testing/INTEGRATION_TESTS.md`.
 
 ## Architecture
 
 ```
-kan-mcp/
-├── src/
-│   ├── index.ts           # MCP server entry, tool & resource registration
-│   ├── client.ts          # Kan API client with error mapping
-│   ├── types.ts           # Branded IDs, discriminated unions
-│   ├── errors.ts          # KanApiError, McpError, error mapping
-│   ├── utils.ts           # Type guards, builders
-│   └── tools/
-│       ├── server.ts      # Server-level tools (health check)
-│       ├── resources.ts   # MCP resource handlers
-│       ├── workspace.ts   # 8 workspace tools
-│       ├── board.ts      # 7 board tools
-│       ├── list.ts       # 3 list tools
-│       ├── card.ts       # 9 card tools
-│       ├── label.ts      # 4 label tools
-│       ├── checklist.ts  # 6 checklist tools
-│       └── comment.ts    # 3 comment tools
-└── tests/
-    ├── setup.ts
-    └── tools/            # Unit tests per domain
+src/
+├── index.ts               # MCP server entry (stdio), tool and resource registration
+├── client.ts              # Kan API client: auth, retries, timeouts, error details
+├── attachment-source.ts   # filePath / url / base64 sources (path and SSRF safety)
+├── types.ts  errors.ts  utils.ts  version.ts
+└── tools/
+    ├── tool.ts            # Tool type, defineTool(), query helpers
+    ├── workspace.ts  member.ts  board.ts  list.ts  card.ts
+    ├── label.ts  checklist.ts  comment.ts  attachment.ts
+    └── server.ts  resources.ts  mod.ts
 ```
 
 ## Type Safety
 
-kan-mcp uses TypeScript strict mode with:
+kan-mcp-full uses TypeScript strict mode with:
 
 - **Branded types** for IDs (WorkspaceId, BoardId, CardId, etc.) to prevent mixing
 - **Discriminated unions** for API responses and tool results
@@ -403,4 +389,4 @@ kan-mcp uses TypeScript strict mode with:
 
 ## License
 
-MIT
+MIT, see [LICENSE](LICENSE). Derived from [michaelruelas/kan-mcp](https://github.com/michaelruelas/kan-mcp), see [NOTICE](NOTICE).

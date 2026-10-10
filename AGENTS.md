@@ -1,8 +1,8 @@
-# AGENTS.md - kan-mcp Development Guide
+# AGENTS.md - kan-mcp-full Development Guide
 
 ## Overview
 
-kan-mcp is a Model Context Protocol (MCP) server for the Kan.bn API. It exposes 54 tools across 10 domains: workspace, member, board, list, card, label, checklist, comment, attachment, and server. It follows the Kan 0.6.0 REST API (OpenAPI at `<kan>/api/v1/openapi.json`).
+kan-mcp-full is a Model Context Protocol (MCP) server for the Kan.bn API. It exposes 54 tools across 10 domains: workspace, member, board, list, card, label, checklist, comment, attachment, and server. It follows the Kan 0.6.0 REST API (OpenAPI at `<kan>/api/v1/openapi.json`).
 
 **Technology Stack:** Bun runtime, TypeScript (strict mode), @modelcontextprotocol/sdk
 
@@ -14,7 +14,7 @@ kan-mcp is a Model Context Protocol (MCP) server for the Kan.bn API. It exposes 
 # Install dependencies
 bun install
 
-# Build for distribution (creates standalone binary ./kan-mcp)
+# Build for distribution (creates standalone binary ./kan-mcp-full)
 bun run build
 
 # Run all unit tests

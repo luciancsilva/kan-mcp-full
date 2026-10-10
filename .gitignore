@@ -147,6 +147,7 @@ vite.config.ts.timestamp-*
 
 *.bun-build
 kan-mcp
+kan-mcp-full
 
 # Git worktrees
 .worktrees/

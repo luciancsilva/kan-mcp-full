@@ -33,6 +33,6 @@ jobs:
       - run: bun install
       - run: bun run build
       - name: Verify binary exists
-        run: test -f ./kan-mcp
+        run: test -f ./kan-mcp-full
 
 
