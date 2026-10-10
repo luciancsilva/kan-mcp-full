@@ -132,6 +132,13 @@ curl http://127.0.0.1:3333/health      # {"status":"ok","version":"..."}
 
 To update later: `git pull && docker compose up -d --build`.
 
+Check that the deployment works (service, token, connection to your Kan and, with the public ID of a **test** card, an attachment upload/list/download/remove through your storage). Needs `curl` and `jq`:
+
+```bash
+scripts/smoke.sh                                  # service, token and Kan connection (read only)
+scripts/smoke.sh http://127.0.0.1:3333 <test-card-public-id>   # also tests attachments end to end
+```
+
 To use the published image instead of building it (after `docker login ghcr.io`, see below): `docker compose pull && docker compose up -d`.
 
 | Variable | Default | Description |
