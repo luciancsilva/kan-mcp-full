@@ -53,6 +53,11 @@ import {
   commentUpdateTool,
   commentDeleteTool,
 } from './comment';
+import {
+  attachmentAddTool,
+  attachmentListTool,
+  attachmentRemoveTool,
+} from './attachment';
 import { serverHealthTool } from './server';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -97,6 +102,9 @@ export const tools: any[] = [
   commentAddTool,
   commentUpdateTool,
   commentDeleteTool,
+  attachmentAddTool,
+  attachmentListTool,
+  attachmentRemoveTool,
   serverHealthTool,
 ];
 

@@ -81,8 +81,36 @@ export interface Card {
   description?: string;
   index: number;
   dueDate?: string;
+  /** Present when the Kan version returns attachments with the card (confirm with GET /cards/{id}). */
+  attachments?: Attachment[];
   createdAt: string;
   updatedAt: string;
+}
+
+export interface Comment {
+  publicId: CommentId;
+  cardPublicId?: CardId;
+  memberPublicId?: MemberId;
+  content?: string;
+  comment?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Attachment {
+  publicId: AttachmentId;
+  filename?: string;
+  originalFilename?: string;
+  contentType?: string;
+  size?: number;
+  createdAt?: string;
+  deletedAt?: string | null;
+}
+
+/** Response of POST /cards/{id}/attachments/upload-url (presigned PUT, valid for 1h). */
+export interface UploadUrlResponse {
+  url: string;
+  key: string;
 }
 
 export interface Label {

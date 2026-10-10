@@ -16,7 +16,7 @@ if (!apiKey) {
 const client = new KanClient(apiKey);
 
 const server = new Server(
-  { name: "kan-mcp", version: "0.1.0" },
+  { name: "kan-mcp", version: "0.2.0" },
   { capabilities: { tools: {}, resources: {} } }
 );
 

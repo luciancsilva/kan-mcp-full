@@ -10,7 +10,7 @@ Built with Bun + TypeScript.
 
 ## Overview
 
-kan-mcp exposes 40 tools across 7 domains for managing Kan.bn workspaces, plus MCP Resources for efficient read operations:
+kan-mcp exposes 43 tools across 8 domains for managing Kan.bn workspaces, plus MCP Resources for efficient read operations:
 
 | Domain     | Tools | Description                              |
 |------------|-------|------------------------------------------|
@@ -21,6 +21,7 @@ kan-mcp exposes 40 tools across 7 domains for managing Kan.bn workspaces, plus M
 | label      | 4     | Create and manage colored labels         |
 | checklist  | 6     | Checklist management with items          |
 | comment    | 3     | Card comments                            |
+| attachment | 3     | Add (file, URL or base64), list and remove card attachments |
 | **Resources** | **3** | **Read-only URIs for efficient context loading** |
 
 ## Quick Start
@@ -65,6 +66,17 @@ Optional: Set a custom API base URL:
 ```bash
 export KAN_API_BASE_URL=https://kan.tools.pugcasa.com/api/v1
 ```
+
+### Attachments
+
+`attachment.add` uploads through the presigned-URL flow of the Kan API, so the Kan instance needs S3-compatible storage configured and reachable from where this MCP runs.
+
+| Variable | Description |
+|----------|-------------|
+| `KAN_MCP_UPLOAD_ROOT` | Directory that `filePath` may read from. `filePath` is disabled when unset. Symlinks that leave this directory are rejected. |
+| `KAN_MCP_ALLOW_PRIVATE_URLS` | Set to `true` to let `url` point to private or internal addresses (blocked by default, including redirects). |
+
+Limits: 50 MB per file (Kan limit). `attachment.list` depends on `GET /cards/{id}` returning an `attachments` field and returns a clear error when it does not.
 
 ## Installation
 
@@ -188,6 +200,14 @@ checklist.delete                 # Delete a checklist
 checklist.addItem                # Add item to checklist
 checklist.updateItem             # Update checklist item
 checklist.deleteItem             # Delete checklist item
+```
+
+### Attachment Tools
+
+```
+attachment.add                   # Attach a file to a card (filePath, url or contentBase64)
+attachment.list                  # List attachments of a card
+attachment.remove                # Remove an attachment
 ```
 
 ### Comment Tools
