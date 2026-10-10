@@ -8,6 +8,34 @@ function debug(message: string, ...args: unknown[]): void {
   }
 }
 
+/** Extracts the message Kan puts in its error body (and field errors from validation failures). */
+async function readErrorDetail(response: Response): Promise<string | undefined> {
+  let text: string;
+  try {
+    text = (await response.text()).trim();
+  } catch {
+    return undefined;
+  }
+  if (!text) return undefined;
+  try {
+    const body = JSON.parse(text) as {
+      message?: unknown;
+      data?: { zodError?: { fieldErrors?: Record<string, string[]> } | null };
+    };
+    const parts: string[] = [];
+    if (typeof body.message === 'string') parts.push(body.message);
+    const fields = body.data?.zodError?.fieldErrors;
+    if (fields) {
+      const list = Object.entries(fields).map(([k, v]) => `${k}: ${v.join(', ')}`);
+      if (list.length) parts.push(`(${list.join('; ')})`);
+    }
+    if (parts.length) return parts.join(' ');
+  } catch {
+    // not JSON: fall through to the raw text
+  }
+  return text.slice(0, 300);
+}
+
 export class KanClient {
   private readonly apiKey: string;
   private readonly baseUrl: string;
@@ -54,7 +82,11 @@ export class KanClient {
         debug(`Response: ${response.status} ${response.statusText}`);
 
         if (!response.ok) {
-          throw KanApiError.fromHttpStatus(response.status, response.statusText);
+          const detail = await readErrorDetail(response);
+          throw KanApiError.fromHttpStatus(
+            response.status,
+            detail ? `${response.statusText}: ${detail}` : response.statusText
+          );
         }
 
         const data = await response.json() as T;

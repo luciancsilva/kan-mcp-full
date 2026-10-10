@@ -1,7 +1,7 @@
 {
   "name": "kan-mcp",
-  "version": "0.2.0",
-  "description": "MCP server for Kan.bn API - exposes 44 tools for workspace, board, list, card, label, checklist, comment, and attachment management",
+  "version": "0.3.0",
+  "description": "MCP server for Kan.bn API - exposes 54 tools for workspace, member, board, list, card, label, checklist, comment, and attachment management",
   "main": "src/index.ts",
   "bin": {
     "kan-mcp": "src/index.ts"

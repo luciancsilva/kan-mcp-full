@@ -3,6 +3,7 @@ import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ListToolsRequestSchema, ListResourcesRequestSchema, ReadResourceRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { KanClient } from "./client.js";
+import { VERSION } from "./version.js";
 import { toMcpError } from "./errors.js";
 import { tools, type Tool } from "./tools/mod.js";
 import { resourceList, handleResource } from "./tools/resources.js";
@@ -16,7 +17,7 @@ if (!apiKey) {
 const client = new KanClient(apiKey);
 
 const server = new Server(
-  { name: "kan-mcp", version: "0.2.0" },
+  { name: "kan-mcp", version: VERSION },
   { capabilities: { tools: {}, resources: {} } }
 );
 

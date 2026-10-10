@@ -1,5 +1,9 @@
 # Plano: MCP do Kan com suporte a anexos
 
+> **Status (2026-10-10):** fases 0 a 3 concluídas e validadas contra o Kan 0.6.0 (inclui `attachment.download`).
+> Também foram corrigidas as rotas herdadas e adicionadas as ferramentas que faltavam em relação ao MCP oficial.
+> Ver `docs/COMPARACAO_MCP_OFICIAL.md`. A fase 4 (PR upstream) segue em aberto.
+
 Data: 2026-10-09
 
 ## Objetivo

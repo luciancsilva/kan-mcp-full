@@ -2,7 +2,7 @@
 
 ## Overview
 
-kan-mcp is a Model Context Protocol (MCP) server for the Kan.bn API. It exposes 44 tools across 8 domains: workspace, board, list, card, label, checklist, comment, and attachment.
+kan-mcp is a Model Context Protocol (MCP) server for the Kan.bn API. It exposes 54 tools across 10 domains: workspace, member, board, list, card, label, checklist, comment, attachment, and server. It follows the Kan 0.6.0 REST API (OpenAPI at `<kan>/api/v1/openapi.json`).
 
 **Technology Stack:** Bun runtime, TypeScript (strict mode), @modelcontextprotocol/sdk
 
@@ -223,45 +223,38 @@ handler: async (client: KanClient, input: SomeInput): Promise<ToolResult<T>> => 
 
 ## Tool Implementation Pattern
 
-When adding a new MCP tool:
-
-1. **Define input interface** in the domain file (e.g., `src/tools/workspace.ts`)
-
-2. **Create tool object** with name, description, inputSchema, and handler:
+Tools are built with `defineTool` (`src/tools/tool.ts`), which wraps `run` so any thrown error becomes a
+`ToolResult` error with the message from the Kan API:
 
 ```typescript
-export const workspaceCreateTool: Tool<WorkspaceCreateInput, Workspace> = {
-  name: 'workspace.create',
-  description: 'Create a new workspace',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      name: { type: 'string' },
-      slug: { type: 'string' },
-      description: { type: 'string' },
-    },
-    required: ['name', 'slug'],
+export const listCreateTool = defineTool<{ boardPublicId: string; name: string }, unknown>({
+  name: 'list.create',
+  description: 'Create a list (column) in a board.',
+  properties: { boardPublicId: { type: 'string' }, name: { type: 'string' } },
+  required: ['boardPublicId', 'name'],
+  run: async (client, input) => {
+    assertString(input.boardPublicId, 'boardPublicId');
+    assertString(input.name, 'name');
+    return client.request(ROUTES.LISTS, {
+      method: 'POST',
+      body: JSON.stringify({ boardPublicId: input.boardPublicId, name: input.name }),
+    });
   },
-  handler: async (client: KanClient, input: WorkspaceCreateInput) => {
-    try {
-      assertString(input.name, 'name');
-      assertString(input.slug, 'slug');
-      assertOptionalString(input.description, 'description');
-      const data = await client.request<Workspace>(ROUTES.WORKSPACES, {
-        method: 'POST',
-        body: JSON.stringify({ name: input.name, slug: input.slug, description: input.description }),
-      });
-      return success(data);
-    } catch (err) {
-      return error(toMcpError(err).message);
-    }
-  },
-};
+});
 ```
 
-3. **Export from domain file** and add to `src/tools/mod.ts`
+Rules learned from the real API (Kan 0.6.0):
 
-4. **Export type** from `src/tools/mod.ts`: `export type { Tool } from './workspace';`
+- Build routes from the OpenAPI spec (`/api/v1/openapi.json`), never from memory: methods differ (PUT, not PATCH, for most updates).
+- Array query parameters must be repeated (`labels=a&labels=b`) and a single value is rejected: use `appendArray`.
+- Check behavior against a real Kan (`scripts/integration-up.sh`), not only with mocks.
+
+Steps to add a tool:
+
+1. Create it with `defineTool` in the domain file under `src/tools/` and export it.
+2. Register it in `src/tools/mod.ts`.
+3. Add a row to `tests/tools/api-contract.test.ts` (method, path, body) and, if it needs several requests, a case in `tests/tools/flows.test.ts`.
+4. Add it to `tests/integration/tools.test.ts` and run it against a real Kan.
 
 ---
 
@@ -322,38 +315,40 @@ if (result.ok) {
 
 ```
 src/
-├── index.ts          # MCP server entry point
-├── client.ts         # Kan API client (KanClient class)
-├── types.ts          # Branded IDs, interfaces, discriminated unions
-├── errors.ts         # KanApiError, McpError, toMcpError
-├── utils.ts          # Type guards, builders, assertions
+├── index.ts              # MCP server entry point
+├── version.ts            # VERSION (keep in sync with package.json)
+├── client.ts             # Kan API client (KanClient class, retries, error details)
+├── types.ts              # Branded IDs, interfaces, discriminated unions
+├── errors.ts             # KanApiError, McpError, toMcpError
+├── utils.ts              # Type guards, builders, assertions
+├── attachment-source.ts  # filePath / url / base64 sources for attachment.add (path and SSRF safety)
 └── tools/
-    ├── mod.ts        # Aggregates all 44 tools
-    ├── workspace.ts  # 8 workspace tools
-    ├── board.ts      # 7 board tools
-    ├── list.ts       # 3 list tools
-    ├── card.ts       # 9 card tools
-    ├── label.ts      # 4 label tools
-    ├── checklist.ts  # 6 checklist tools
-    └── comment.ts    # 3 comment tools
+    ├── tool.ts           # Tool type, defineTool(), appendArray(), withQuery()
+    ├── mod.ts            # Aggregates all 54 tools
+    ├── workspace.ts      # 9 workspace tools
+    ├── member.ts         # 3 member tools + 3 workspace invite-link tools
+    ├── board.ts          # 8 board tools
+    ├── list.ts           # 3 list tools
+    ├── card.ts           # 10 card tools
+    ├── label.ts          # 4 label tools
+    ├── checklist.ts      # 6 checklist tools
+    ├── comment.ts        # 3 comment tools
+    ├── attachment.ts     # 4 attachment tools
+    ├── server.ts         # server.health
+    └── resources.ts      # MCP resources
 
 tests/
-├── setup.ts          # Test setup (minimal)
-├── client.test.ts    # API client tests
-├── tools/            # Unit tests per domain
-└── integration/      # Integration tests
+├── helpers.ts            # useKanMock(), run(): fetch mock that records requests
+├── client.test.ts        # API client tests
+├── tools/                # api-contract (method/path/body per tool), flows, attachments, ...
+└── integration/          # Real Kan: tools.test.ts, attachment.test.ts (see docs/testing)
 ```
 
 ---
 
 ## Adding New Tools
 
-1. Add input interface to the appropriate domain file in `src/tools/`
-2. Implement the tool following the pattern above
-3. Export the tool from the domain file
-4. Import and add to `tools` array in `src/tools/mod.ts`
-5. Write tests in `tests/tools/{domain}.test.ts`
-6. Update README.md if the tool should be documented
+See "Tool Implementation Pattern" above. Update README.md when a tool is added.
 
 ---
 

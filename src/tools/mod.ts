@@ -1,4 +1,4 @@
-import type { Tool } from './workspace';
+import type { Tool } from './tool';
 import {
   workspaceListTool,
   workspaceCreateTool,
@@ -8,6 +8,7 @@ import {
   workspaceDeleteTool,
   workspaceSearchTool,
   workspaceCheckSlugAvailabilityTool,
+  workspaceFindByNameTool,
 } from './workspace';
 import {
   boardListTool,
@@ -17,6 +18,7 @@ import {
   boardUpdateTool,
   boardDeleteTool,
   boardCheckSlugAvailabilityTool,
+  boardFindByNameTool,
 } from './board';
 import {
   listCreateTool,
@@ -33,6 +35,7 @@ import {
   cardAddMemberTool,
   cardRemoveMemberTool,
   cardListActivitiesTool,
+  cardDuplicateTool,
 } from './card';
 import {
   labelCreateTool,
@@ -59,6 +62,14 @@ import {
   attachmentRemoveTool,
   attachmentDownloadTool,
 } from './attachment';
+import {
+  memberInviteTool,
+  memberRemoveTool,
+  memberUpdateRoleTool,
+  workspaceGetInviteLinkTool,
+  workspaceCreateInviteLinkTool,
+  workspaceDeactivateInviteLinksTool,
+} from './member';
 import { serverHealthTool } from './server';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -71,6 +82,7 @@ export const tools: any[] = [
   workspaceDeleteTool,
   workspaceSearchTool,
   workspaceCheckSlugAvailabilityTool,
+  workspaceFindByNameTool,
   boardListTool,
   boardCreateTool,
   boardGetByIdTool,
@@ -78,6 +90,7 @@ export const tools: any[] = [
   boardUpdateTool,
   boardDeleteTool,
   boardCheckSlugAvailabilityTool,
+  boardFindByNameTool,
   listCreateTool,
   listUpdateTool,
   listDeleteTool,
@@ -90,6 +103,7 @@ export const tools: any[] = [
   cardAddMemberTool,
   cardRemoveMemberTool,
   cardListActivitiesTool,
+  cardDuplicateTool,
   labelCreateTool,
   labelGetByIdTool,
   labelUpdateTool,
@@ -107,7 +121,13 @@ export const tools: any[] = [
   attachmentListTool,
   attachmentRemoveTool,
   attachmentDownloadTool,
+  memberInviteTool,
+  memberRemoveTool,
+  memberUpdateRoleTool,
+  workspaceGetInviteLinkTool,
+  workspaceCreateInviteLinkTool,
+  workspaceDeactivateInviteLinksTool,
   serverHealthTool,
 ];
 
-export type { Tool } from './workspace';
+export type { Tool } from './tool';

@@ -1,268 +1,172 @@
-import { KanClient } from '../client';
-import { Workspace, ToolResult, Board, Card } from '../types';
-import { success, error, assertString, assertOptionalString } from '../utils';
-import { toMcpError } from '../errors';
 import { ROUTES } from '../types';
+import { assertString, assertOptionalString } from '../utils';
+import { defineTool, withQuery } from './tool';
 
-export interface Tool<TInput = unknown, TOutput = unknown> {
-  name: string;
-  description: string;
-  inputSchema: {
-    type: 'object';
-    properties: Record<string, unknown>;
-    required: string[];
-  };
-  handler: (client: KanClient, input: TInput) => Promise<ToolResult<TOutput>>;
+export type { Tool } from './tool';
+
+interface WorkspaceMembership {
+  role: string;
+  workspace: { publicId: string; name: string; slug: string; [key: string]: unknown };
 }
 
-interface WorkspaceListInput {
-  limit?: number;
-  offset?: number;
-}
-
-interface WorkspaceCreateInput {
-  name: string;
-  slug: string;
-  description?: string;
-}
-
-interface WorkspaceGetByIdInput {
-  publicId: string;
-}
-
-interface WorkspaceGetBySlugInput {
-  slug: string;
-}
-
-interface WorkspaceUpdateInput {
-  publicId: string;
-  name?: string;
-  description?: string;
-  showEmailsToMembers?: boolean;
-  weekStartDay?: string;
-}
-
-interface WorkspaceDeleteInput {
-  publicId: string;
-}
-
-interface WorkspaceSearchInput {
-  query: string;
-}
-
-interface WorkspaceCheckSlugInput {
-  slug: string;
-}
-
-interface SearchResult {
-  boards: Board[];
-  cards: Card[];
-}
-
-export const workspaceListTool: Tool<WorkspaceListInput, Workspace[]> = {
+export const workspaceListTool = defineTool<{ limit?: number; offset?: number }, WorkspaceMembership[]>({
   name: 'workspace.list',
-  description: 'Get all workspaces',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      limit: { type: 'number' },
-      offset: { type: 'number' },
-    },
-    required: [],
+  description:
+    'List the workspaces the API key belongs to, each with the role of the user. limit and offset paginate the result on the client side.',
+  properties: { limit: { type: 'number' }, offset: { type: 'number' } },
+  run: async (client, input) => {
+    const all = await client.request<WorkspaceMembership[]>(ROUTES.WORKSPACES);
+    const start = input.offset ?? 0;
+    return input.limit === undefined ? all.slice(start) : all.slice(start, start + input.limit);
   },
-  handler: async (client: KanClient, input: WorkspaceListInput): Promise<ToolResult<Workspace[]>> => {
-    try {
-      const queryParams = new URLSearchParams();
-      if (input.limit !== undefined) queryParams.set('limit', String(input.limit));
-      if (input.offset !== undefined) queryParams.set('offset', String(input.offset));
-      const query = queryParams.toString();
-      const path = `${ROUTES.WORKSPACES}${query ? `?${query}` : ''}`;
-      const data = await client.request<Workspace[]>(path);
-      return success(data);
-    } catch (err) {
-      return error(toMcpError(err).message);
-    }
-  },
-};
+});
 
-export const workspaceCreateTool: Tool<WorkspaceCreateInput, Workspace> = {
-  name: 'workspace.create',
-  description: 'Create a new workspace',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      name: { type: 'string' },
-      slug: { type: 'string' },
-      description: { type: 'string' },
-    },
-    required: ['name', 'slug'],
-  },
-  handler: async (client: KanClient, input: WorkspaceCreateInput): Promise<ToolResult<Workspace>> => {
-    try {
-      assertString(input.name, 'name');
-      assertString(input.slug, 'slug');
-      assertOptionalString(input.description, 'description');
-      const data = await client.request<Workspace>(ROUTES.WORKSPACES, {
-        method: 'POST',
-        body: JSON.stringify({
-          name: input.name,
-          slug: input.slug,
-          description: input.description,
-        }),
-      });
-      return success(data);
-    } catch (err) {
-      return error(toMcpError(err).message);
-    }
-  },
-};
-
-export const workspaceGetByIdTool: Tool<WorkspaceGetByIdInput, Workspace> = {
-  name: 'workspace.getById',
-  description: 'Get workspace by public ID',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      publicId: { type: 'string' },
-    },
-    required: ['publicId'],
-  },
-  handler: async (client: KanClient, input: WorkspaceGetByIdInput): Promise<ToolResult<Workspace>> => {
-    try {
-      assertString(input.publicId, 'publicId');
-      const data = await client.request<Workspace>(`${ROUTES.WORKSPACES}/${input.publicId}`);
-      return success(data);
-    } catch (err) {
-      return error(toMcpError(err).message);
-    }
-  },
-};
-
-export const workspaceGetBySlugTool: Tool<WorkspaceGetBySlugInput, Workspace> = {
-  name: 'workspace.getBySlug',
-  description: 'Get workspace by slug',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      slug: { type: 'string' },
-    },
-    required: ['slug'],
-  },
-  handler: async (client: KanClient, input: WorkspaceGetBySlugInput): Promise<ToolResult<Workspace>> => {
-    try {
-      assertString(input.slug, 'slug');
-      const data = await client.request<Workspace>(`${ROUTES.WORKSPACES}/slug/${input.slug}`);
-      return success(data);
-    } catch (err) {
-      return error(toMcpError(err).message);
-    }
-  },
-};
-
-export const workspaceUpdateTool: Tool<WorkspaceUpdateInput, Workspace> = {
-  name: 'workspace.update',
-  description: 'Update a workspace',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      publicId: { type: 'string' },
-      name: { type: 'string' },
-      description: { type: 'string' },
-      showEmailsToMembers: { type: 'boolean' },
-      weekStartDay: { type: 'string' },
-    },
-    required: ['publicId'],
-  },
-  handler: async (client: KanClient, input: WorkspaceUpdateInput): Promise<ToolResult<Workspace>> => {
-    try {
-      assertString(input.publicId, 'publicId');
-      assertOptionalString(input.name, 'name');
-      assertOptionalString(input.description, 'description');
-      assertOptionalString(input.weekStartDay, 'weekStartDay');
-      const body: Record<string, unknown> = {};
-      if (input.name !== undefined) body.name = input.name;
-      if (input.description !== undefined) body.description = input.description;
-      if (input.showEmailsToMembers !== undefined) body.showEmailsToMembers = input.showEmailsToMembers;
-      if (input.weekStartDay !== undefined) body.weekStartDay = input.weekStartDay;
-      const data = await client.request<Workspace>(`${ROUTES.WORKSPACES}/${input.publicId}`, {
-        method: 'PATCH',
-        body: JSON.stringify(body),
-      });
-      return success(data);
-    } catch (err) {
-      return error(toMcpError(err).message);
-    }
-  },
-};
-
-export const workspaceDeleteTool: Tool<WorkspaceDeleteInput, { success: boolean }> = {
-  name: 'workspace.delete',
-  description: 'Delete a workspace',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      publicId: { type: 'string' },
-    },
-    required: ['publicId'],
-  },
-  handler: async (client: KanClient, input: WorkspaceDeleteInput): Promise<ToolResult<{ success: boolean }>> => {
-    try {
-      assertString(input.publicId, 'publicId');
-      await client.request(`${ROUTES.WORKSPACES}/${input.publicId}`, {
-        method: 'DELETE',
-      });
-      return success({ success: true });
-    } catch (err) {
-      return error(toMcpError(err).message);
-    }
-  },
-};
-
-export const workspaceSearchTool: Tool<WorkspaceSearchInput, SearchResult> = {
-  name: 'workspace.search',
-  description: 'Search boards and cards within a workspace',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      query: { type: 'string' },
-    },
-    required: ['query'],
-  },
-  handler: async (client: KanClient, input: WorkspaceSearchInput): Promise<ToolResult<SearchResult>> => {
-    try {
-      assertString(input.query, 'query');
-      const queryParams = new URLSearchParams({ q: input.query });
-      const data = await client.request<SearchResult>(`${ROUTES.WORKSPACES}/search?${queryParams}`);
-      return success(data);
-    } catch (err) {
-      return error(toMcpError(err).message);
-    }
-  },
-};
-
-export const workspaceCheckSlugAvailabilityTool: Tool<WorkspaceCheckSlugInput, { available: boolean }> = {
-  name: 'workspace.checkSlugAvailability',
-  description: 'Check if a workspace slug is available',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      slug: { type: 'string' },
-    },
-    required: ['slug'],
-  },
-  handler: async (
-    client: KanClient,
-    input: WorkspaceCheckSlugInput
-  ): Promise<ToolResult<{ available: boolean }>> => {
-    try {
-      assertString(input.slug, 'slug');
-      const queryParams = new URLSearchParams({ slug: input.slug });
-      const data = await client.request<{ available: boolean }>(
-        `${ROUTES.WORKSPACES}/slug-available?${queryParams}`
+export const workspaceFindByNameTool = defineTool<{ name: string }, WorkspaceMembership>({
+  name: 'workspace.findByName',
+  description: 'Find a workspace by its name (case-insensitive) among the ones the user belongs to.',
+  properties: { name: { type: 'string' } },
+  required: ['name'],
+  run: async (client, input) => {
+    assertString(input.name, 'name');
+    const all = await client.request<WorkspaceMembership[]>(ROUTES.WORKSPACES);
+    const found = all.find((m) => m.workspace.name.toLowerCase() === input.name.toLowerCase());
+    if (!found) {
+      throw new Error(
+        `No workspace found with name "${input.name}". Available workspaces: ${all.map((m) => m.workspace.name).join(', ')}`
       );
-      return success(data);
+    }
+    return found;
+  },
+});
+
+export const workspaceCreateTool = defineTool<{ name: string; slug?: string; description?: string }, unknown>({
+  name: 'workspace.create',
+  description: 'Create a new workspace. The slug is generated by Kan when omitted.',
+  properties: { name: { type: 'string' }, slug: { type: 'string' }, description: { type: 'string' } },
+  required: ['name'],
+  run: async (client, input) => {
+    assertString(input.name, 'name');
+    assertOptionalString(input.slug, 'slug');
+    assertOptionalString(input.description, 'description');
+    const body: Record<string, unknown> = { name: input.name };
+    if (input.slug !== undefined) body.slug = input.slug;
+    if (input.description !== undefined) body.description = input.description;
+    return client.request(ROUTES.WORKSPACES, { method: 'POST', body: JSON.stringify(body) });
+  },
+});
+
+export const workspaceGetByIdTool = defineTool<{ publicId: string }, unknown>({
+  name: 'workspace.getById',
+  description: 'Get a workspace by public ID, including its members.',
+  properties: { publicId: { type: 'string' } },
+  required: ['publicId'],
+  run: async (client, input) => {
+    assertString(input.publicId, 'publicId');
+    return client.request(`${ROUTES.WORKSPACES}/${input.publicId}`);
+  },
+});
+
+export const workspaceGetBySlugTool = defineTool<{ slug: string }, unknown>({
+  name: 'workspace.getBySlug',
+  description: 'Get a workspace by slug (among the workspaces the user belongs to). Same result as workspace.getById.',
+  properties: { slug: { type: 'string' } },
+  required: ['slug'],
+  run: async (client, input) => {
+    assertString(input.slug, 'slug');
+    // Kan 0.6.0 routes GET /workspaces/{slug} to the public-ID handler, so the slug is resolved here.
+    const all = await client.request<WorkspaceMembership[]>(ROUTES.WORKSPACES);
+    const found = all.find((m) => m.workspace.slug === input.slug);
+    if (!found) {
+      throw new Error(
+        `No workspace found with slug "${input.slug}". Available slugs: ${all.map((m) => m.workspace.slug).join(', ')}`
+      );
+    }
+    return client.request(`${ROUTES.WORKSPACES}/${found.workspace.publicId}`);
+  },
+});
+
+export const workspaceUpdateTool = defineTool<
+  {
+    publicId: string;
+    name?: string;
+    slug?: string;
+    description?: string;
+    showEmailsToMembers?: boolean;
+    weekStartDay?: number;
+  },
+  unknown
+>({
+  name: 'workspace.update',
+  description: 'Update a workspace. weekStartDay is 0 (Sunday) to 6 (Saturday).',
+  properties: {
+    publicId: { type: 'string' },
+    name: { type: 'string' },
+    slug: { type: 'string' },
+    description: { type: 'string' },
+    showEmailsToMembers: { type: 'boolean' },
+    weekStartDay: { type: 'number' },
+  },
+  required: ['publicId'],
+  run: async (client, input) => {
+    assertString(input.publicId, 'publicId');
+    const { publicId, ...fields } = input;
+    return client.request(`${ROUTES.WORKSPACES}/${publicId}`, {
+      method: 'PUT',
+      body: JSON.stringify(fields),
+    });
+  },
+});
+
+export const workspaceDeleteTool = defineTool<{ publicId: string }, unknown>({
+  name: 'workspace.delete',
+  description: 'Delete a workspace.',
+  properties: { publicId: { type: 'string' } },
+  required: ['publicId'],
+  run: async (client, input) => {
+    assertString(input.publicId, 'publicId');
+    return client.request(`${ROUTES.WORKSPACES}/${input.publicId}`, { method: 'DELETE' });
+  },
+});
+
+export const workspaceSearchTool = defineTool<
+  { workspacePublicId: string; query: string; limit?: number },
+  unknown
+>({
+  name: 'workspace.search',
+  description: 'Search boards and cards of a workspace (query up to 100 characters, limit 1 to 50).',
+  properties: {
+    workspacePublicId: { type: 'string' },
+    query: { type: 'string' },
+    limit: { type: 'number' },
+  },
+  required: ['workspacePublicId', 'query'],
+  run: async (client, input) => {
+    assertString(input.workspacePublicId, 'workspacePublicId');
+    assertString(input.query, 'query');
+    const params = new URLSearchParams({ query: input.query });
+    if (input.limit !== undefined) params.set('limit', String(input.limit));
+    return client.request(withQuery(`${ROUTES.WORKSPACES}/${input.workspacePublicId}/search`, params));
+  },
+});
+
+export const workspaceCheckSlugAvailabilityTool = defineTool<{ slug: string }, unknown>({
+  name: 'workspace.checkSlugAvailability',
+  description:
+    'Check whether a workspace slug is available (isAvailable) or reserved (isReserved). Kan 0.6.0 may answer "Workspace not found" for this check (the route collides with GET /workspaces/{id}); workspace.create reports a taken slug anyway.',
+  properties: { slug: { type: 'string' } },
+  required: ['slug'],
+  run: async (client, input) => {
+    assertString(input.slug, 'slug');
+    const params = new URLSearchParams({ workspaceSlug: input.slug });
+    try {
+      return await client.request(withQuery(`${ROUTES.WORKSPACES}/check-slug-availability`, params));
     } catch (err) {
-      return error(toMcpError(err).message);
+      if (err instanceof Error && /workspace not found/i.test(err.message)) {
+        throw new Error(
+          'This Kan version routes the slug check to the wrong handler (GET /workspaces/check-slug-availability returns "Workspace not found"). Create the workspace and handle a slug conflict instead.'
+        );
+      }
+      throw err;
     }
   },
-};
+});

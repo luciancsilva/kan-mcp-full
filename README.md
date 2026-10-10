@@ -10,18 +10,20 @@ Built with Bun + TypeScript.
 
 ## Overview
 
-kan-mcp exposes 44 tools across 8 domains for managing Kan.bn workspaces, plus MCP Resources for efficient read operations:
+kan-mcp exposes 54 tools for managing Kan.bn workspaces, plus MCP Resources for efficient read operations. It follows the Kan REST API of **Kan 0.6.0** (tested against `ghcr.io/kanbn/kan:latest`).
 
 | Domain     | Tools | Description                              |
 |------------|-------|------------------------------------------|
-| workspace  | 8     | List, create, get, update, delete, search workspaces |
-| board      | 7     | Manage boards with slug availability checking |
+| workspace  | 12    | List, find, create, update, delete, search; invite links |
+| member     | 3     | Invite, remove, change role              |
+| board      | 8     | Manage boards, card filters, public boards by slug |
 | list       | 3     | Create, update, delete lists             |
-| card       | 9     | Full card management with labels, members, activities |
+| card       | 10    | Cards, move, duplicate, labels, members, activities |
 | label      | 4     | Create and manage colored labels         |
 | checklist  | 6     | Checklist management with items          |
 | comment    | 3     | Card comments                            |
 | attachment | 4     | Add (file, URL or base64), list, remove and download card attachments |
+| server     | 1     | Health check                             |
 | **Resources** | **3** | **Read-only URIs for efficient context loading** |
 
 ## Quick Start
@@ -130,58 +132,78 @@ Add this to your agent/IDE's MCP server configuration:
 ### Workspace Tools
 
 ```
-workspace.list                    # List all workspaces
-workspace.create                  # Create a new workspace
-workspace.getById                 # Get workspace by ID
-workspace.getBySlug              # Get workspace by slug
-workspace.update                  # Update workspace properties
+workspace.list                    # List workspaces of the user (with role); limit/offset on the client
+workspace.findByName              # Find a workspace by name
+workspace.create                  # Create a new workspace (slug optional)
+workspace.getById                 # Get workspace by ID (with members)
+workspace.getBySlug               # Get workspace by slug
+workspace.update                  # Update name, slug, description, weekStartDay, showEmailsToMembers
 workspace.delete                  # Delete a workspace
-workspace.search                  # Search boards and cards
-workspace.checkSlugAvailability   # Check if slug is available
+workspace.search                  # Search boards and cards of a workspace
+workspace.checkSlugAvailability   # Check a slug (see note below)
+workspace.getInviteLink           # Get the active invite link
+workspace.createInviteLink        # Create an invite link
+workspace.deactivateInviteLinks   # Deactivate the invite link
+```
+
+> **Note:** Kan 0.6.0 routes `GET /workspaces/check-slug-availability` to the public-ID handler, so
+> `workspace.checkSlugAvailability` may answer with an explanatory error. `workspace.create` reports a
+> taken slug anyway. `workspace.getBySlug` is unaffected: it resolves the slug from `workspace.list`.
+
+### Member Tools
+
+```
+member.invite                    # Invite a person by e-mail
+member.remove                    # Remove a member from a workspace
+member.updateRole                # Change the role: admin, member or guest
 ```
 
 ### Board Tools
 
 ```
-board.list                       # List boards (with filters)
-board.create                     # Create a new board
+board.list                       # List boards of a workspace (type/archived filters)
+board.findByName                 # Find a board by name inside a workspace
+board.create                     # Create a board with lists, labels, template; slug/visibility optional
 board.getById                    # Get board by ID (with card filters)
-board.getBySlug                  # Get board by slug (with card filters)
-board.update                     # Update board properties
+board.getBySlug                  # Get a PUBLIC board by workspace slug and board slug
+board.update                     # Update name, slug, visibility, favorite, isArchived
 board.delete                     # Delete a board
-board.checkSlugAvailability      # Check if slug is available
+board.checkSlugAvailability      # Check a slug for a board
 ```
 
 #### Board Filtering
-`board.getById` and `board.getBySlug` support filtering cards within the board:
+`board.getById` and `board.getBySlug` narrow the cards returned:
 
 | Parameter | Description |
 |-----------|-------------|
-| `members` | Filter cards by assigned member IDs |
-| `labels` | Filter cards by label IDs |
-| `lists` | Filter cards by list IDs |
-| `dueDateFilters` | Filter by due date status: `overdue`, `today`, `tomorrow`, `next-week`, `next-month`, `no-due-date` |
-| `type` | Filter by board type: `regular`, `template` |
+| `members` | Cards assigned to these workspace member IDs |
+| `labels` | Cards with these label IDs |
+| `lists` | Only these lists |
+| `dueDateFilters` | `overdue`, `today`, `tomorrow`, `next-week`, `next-month`, `no-due-date` |
+| `type` | `regular` or `template` (`board.getById` only) |
+
+> Kan only serves **public** boards by slug (private ones return nothing). Use `board.getById` for private boards.
 
 ### List Tools
 
 ```
 list.create                      # Create a new list
-list.update                      # Update list properties
+list.update                      # Rename or reorder (index) a list
 list.delete                      # Delete a list
 ```
 
 ### Card Tools
 
 ```
-card.create                      # Create a new card
-card.getById                     # Get card by ID
-card.update                      # Update card properties
+card.create                      # Create a card (labels, members, due date, position)
+card.getById                     # Get card by ID (labels, members, checklists, attachments, list)
+card.update                      # Update fields; move to another list with listPublicId + index
 card.delete                      # Delete a card
-card.addLabel                    # Add label to card
-card.removeLabel                 # Remove label from card
-card.addMember                   # Add member to card
-card.removeMember                # Remove member from card
+card.duplicate                   # Duplicate a card (same or other list)
+card.addLabel                    # Add label to card (idempotent)
+card.removeLabel                 # Remove label from card (idempotent)
+card.addMember                   # Assign a workspace member (idempotent)
+card.removeMember                # Unassign a workspace member (idempotent)
 card.listActivities              # List card activities (with cursor pagination)
 ```
 
@@ -233,7 +255,7 @@ server.health                    # Check MCP server and dependency health
 MCP Resources provide read-only data URIs for efficient LLM context loading. Unlike tools (which require an action), resources allow the LLM to read data directly via URI.
 
 ```
-kan://stats                                    # Application statistics
+kan://stats                                    # Application statistics (needs Kan's admin API key)
 kan://board/{boardPublicId}                   # Board by public ID
 kan://workspace/{workspaceSlug}/board/{boardSlug}  # Board by slug
 ```
@@ -290,7 +312,7 @@ Output: { "publicId": "ws_xxx", "name": "Project Alpha", "slug": "project-alpha"
 AI: Now create a board called "Sprint 1" in that workspace
 
 Tool: board.create
-Input: { "workspacePublicId": "ws_xxx", "name": "Sprint 1", "slug": "sprint-1", "visibility": "private" }
+Input: { "workspacePublicId": "ws_xxx", "name": "Sprint 1", "lists": ["Todo", "Doing", "Done"], "labels": ["backend"] }
 Output: { "publicId": "brd_xxx", "name": "Sprint 1", ... }
 ```
 
@@ -318,14 +340,14 @@ Input: { "checklistPublicId": "chk_xxx", "title": "Write auth middleware" }
 ### Search and update
 
 ```
-AI: Find all cards with "login" in the title and update their priority to high
+AI: Find the cards with "login" in the title and move one to the Doing list
 
 Tool: workspace.search
-Input: { "query": "login" }
-Output: { "boards": [...], "cards": [{ "publicId": "card_xxx", "title": "Implement login", ... }] }
+Input: { "workspacePublicId": "ws_xxx", "query": "login" }
+Output: [{ "type": "card", "publicId": "card_xxx", "title": "Implement login", ... }]
 
 Tool: card.update
-Input: { "publicId": "card_xxx", "priority": "high" }
+Input: { "publicId": "card_xxx", "title": "Implement login (SSO)", "listPublicId": "lst_doing" }
 ```
 
 ## Test Coverage

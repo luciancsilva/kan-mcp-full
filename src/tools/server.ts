@@ -1,5 +1,6 @@
 import { KanClient } from '../client.js';
-import type { Tool } from './workspace.js';
+import type { Tool } from './tool.js';
+import { VERSION } from '../version.js';
 import { ToolResult } from '../types.js';
 import { success, error } from '../utils.js';
 
@@ -23,7 +24,7 @@ export const serverHealthTool: Tool<object, ServerHealthOutput> = {
   handler: async (client: KanClient): Promise<ToolResult<ServerHealthOutput>> => {
     try {
       const startTime = Date.now();
-      const healthCheckPath = '/workspaces?limit=1';
+      const healthCheckPath = '/workspaces';
       
       let apiReachable = false;
       let apiLatencyMs: number | undefined;
@@ -47,7 +48,7 @@ export const serverHealthTool: Tool<object, ServerHealthOutput> = {
       const result: ServerHealthOutput = {
         status,
         timestamp: new Date().toISOString(),
-        version: '0.1.0',
+        version: VERSION,
         apiReachable,
       };
 
