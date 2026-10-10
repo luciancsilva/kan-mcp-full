@@ -169,7 +169,7 @@ stdio from the image (the MCP client starts the container on demand):
   "env": { "KAN_API_KEY": "kan_...", "KAN_API_BASE_URL": "https://kan.example.com/api/v1" } } } }
 ```
 
-Publishing the image: `.github/workflows/docker.yml` builds `linux/amd64` and `linux/arm64`. Every push to `main` publishes `ghcr.io/<owner>/kan-mcp-full:latest` (and `:sha-<short>`); pushing a `v*.*.*` tag (e.g. `git tag v0.4.0 && git push origin v0.4.0`) also publishes the version tags `:0.4.0` and `:0.4`. Pull requests only build. The first publication creates a private package: make it public in the GitHub package settings, or `docker login ghcr.io` (a token with `read:packages`) on the server.
+Publishing the image: `.github/workflows/docker.yml` builds `linux/amd64` and `linux/arm64`. Every push to `main` publishes `ghcr.io/<owner>/kan-mcp-full:latest` (and `:sha-<short>`); a `v*.*.*` tag also publishes the version tags `:0.4.0` and `:0.4`. Create the tag with `git tag v0.4.0 && git push origin v0.4.0`, or from GitHub: Actions, **Release**, Run workflow (it tags `v<package.json version>`, creates the release and builds the image for that tag). After each publication a smoke job pulls the image from GHCR and checks `/health` and the 54 tools. Pull requests only build. The first publication creates a private package: make it public in the GitHub package settings, or `docker login ghcr.io` (a token with `read:packages`) on the server.
 
 ### Where to add the configuration
 
