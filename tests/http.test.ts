@@ -7,7 +7,10 @@ import { startHttpServer, MIN_TOKEN_LENGTH } from '../src/http';
 const TOKEN = 'a-long-enough-test-token';
 
 // A fake Kan so the MCP server runs for real, end to end, over HTTP.
+// Always 127.0.0.1, never "localhost": older Bun versions resolve localhost to ::1 on some CI runners,
+// while these servers listen on IPv4 only.
 const fakeKan = Bun.serve({
+  hostname: '127.0.0.1',
   port: 0,
   fetch: (req) =>
     req.headers.get('authorization') === 'Bearer kan-key'
@@ -19,13 +22,14 @@ let http: ReturnType<typeof startHttpServer>;
 let base: string;
 
 beforeAll(() => {
-  const client = new KanClient('kan-key', `http://localhost:${fakeKan.port}/api/v1`, 5000, 0);
+  const client = new KanClient('kan-key', `http://127.0.0.1:${fakeKan.port}/api/v1`, 5000, 0);
   http = startHttpServer({ client, token: TOKEN, port: 0, maxBodyBytes: 1024 * 1024 });
-  base = `http://localhost:${http.port}`;
+  base = `http://127.0.0.1:${http.port}`;
 });
 
 afterAll(async () => {
-  await http.stop(true);
+  // Never let a failed setup leave a server open: that would keep the test process alive.
+  await http?.stop(true);
   await fakeKan.stop(true);
 });
 
