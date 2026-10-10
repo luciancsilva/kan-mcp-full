@@ -27,10 +27,12 @@ beforeAll(() => {
   base = `http://127.0.0.1:${http.port}`;
 });
 
-afterAll(async () => {
-  // Never let a failed setup leave a server open: that would keep the test process alive.
-  await http?.stop(true);
-  await fakeKan.stop(true);
+afterAll(() => {
+  // Not awaited on purpose: in Bun 1.1.x the promise of stop(true) may never resolve while keep-alive
+  // connections of the MCP client are open, which hung the whole test run. `http` is optional so a
+  // failed setup still stops the fake Kan.
+  void http?.stop(true);
+  void fakeKan.stop(true);
 });
 
 async function connect(token = TOKEN) {
