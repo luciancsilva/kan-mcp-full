@@ -1,3 +1,5 @@
+> **Histórico:** documento do projeto original (`michaelruelas/kan-mcp`, abril de 2026), escrito para uma versão antiga da API do Kan. As rotas, nomes e contagens aqui estão desatualizados. Para o estado atual, veja `README.md`, `AGENTS.md` e `docs/COMPARACAO_MCP_OFICIAL.md`.
+
 # Kan MCP Server Design Specification
 
 > **Date:** 2026-04-09

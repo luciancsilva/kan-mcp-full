@@ -98,7 +98,7 @@ export class KanClient {
         if (error instanceof Error && error.name === 'AbortError') {
           debug(`Timeout after ${timeout}ms for ${path}`);
           lastError = new Error(`Request timeout after ${timeout}ms`);
-        } else if (attempt < maxRetries && this.isRetryableError(error)) {
+        } else if (attempt < maxRetries && this.isRetryableError(error, options?.method)) {
           debug(`Retryable error, retrying: ${error}`);
           lastError = error as Error;
           const delay = Math.min(1000 * Math.pow(2, attempt), 10000);
@@ -118,12 +118,18 @@ export class KanClient {
     throw lastError || new Error('Request failed');
   }
 
-  private isRetryableError(error: unknown): boolean {
+  /**
+   * POST and PATCH are not idempotent: after a 5xx or a dropped connection the server may already have
+   * applied the change, and a retry would duplicate it (two cards, two comments). They are only retried
+   * on 429, where the request was refused before being processed.
+   */
+  private isRetryableError(error: unknown, method = 'GET'): boolean {
+    const idempotent = !['POST', 'PATCH'].includes(method.toUpperCase());
     if (error instanceof KanApiError) {
-      return error.status >= 500 || error.status === 429;
+      return error.status === 429 || (idempotent && error.status >= 500);
     }
     if (error instanceof TypeError) {
-      return true;
+      return idempotent;
     }
     return false;
   }

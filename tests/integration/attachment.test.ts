@@ -45,13 +45,18 @@ describe.skipIf(!enabled)('Attachment integration tests', () => {
       process.env.KAN_API_KEY as string,
       process.env.KAN_API_BASE_URL ?? 'http://localhost:3000/api/v1'
     );
+    // Another suite may have used up the key's rate limit window (Kan answers with 401): wait for it.
+    for (let attempt = 0; attempt < 8; attempt++) {
+      if ((await attachmentListTool.handler(client, { cardPublicId: card })).ok) break;
+      await new Promise((resolve) => setTimeout(resolve, 10_000));
+    }
     root = await mkdtemp(join(tmpdir(), 'kan-mcp-it-'));
     downloads = join(root, 'downloads');
     await mkdir(downloads);
     process.env.KAN_MCP_UPLOAD_ROOT = root;
     process.env.KAN_MCP_DOWNLOAD_DIR = downloads;
     await removeAll();
-  });
+  }, 120_000);
 
   afterAll(async () => {
     await removeAll();

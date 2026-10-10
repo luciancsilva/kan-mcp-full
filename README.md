@@ -6,7 +6,6 @@ Built with Bun + TypeScript.
 
 ![TypeScript](https://img.shields.io/badge/typescript-%23007ACC.svg?style=for-the-badge&logo=typescript&logoColor=white)
 ![Bun](https://img.shields.io/badge/Bun-%23000000.svg?style=for-the-badge&logo=bun&logoColor=white)
-![Test Coverage](https://img.shields.io/badge/coverage-97%25-brightgreen?style=for-the-badge)
 
 ## Overview
 
@@ -39,21 +38,6 @@ bun test
 bun run build
 ```
 
-## Publishing
-
-```bash
-# Login to npm
-npm login
-
-# Publish to npm
-bun publish --access public
-```
-
-After publishing, users can install with:
-```bash
-bunx kan-mcp
-```
-
 ## Configuration
 
 kan-mcp requires a Kan.bn API key:
@@ -66,8 +50,14 @@ bun run src/index.ts
 Optional: Set a custom API base URL:
 
 ```bash
-export KAN_API_BASE_URL=https://kan.tools.pugcasa.com/api/v1
+export KAN_API_BASE_URL=https://kan.example.com/api/v1   # your Kan instance; defaults to https://kan.bn/api/v1
 ```
+
+### Retries
+
+The HTTP client retries `GET`, `PUT` and `DELETE` on 5xx, network errors and 429 (up to 3 times, with backoff). `POST` and `PATCH` are only retried on 429, because after a 5xx or a dropped connection the change may already have been applied and a retry would duplicate it (two cards, two comments).
+
+Kan answers requests above the API key's rate limit (100 per minute by default) with `401 Unauthorized`, not 429, so that case is not retried automatically.
 
 ### Attachments
 
@@ -79,43 +69,50 @@ export KAN_API_BASE_URL=https://kan.tools.pugcasa.com/api/v1
 | `KAN_MCP_DOWNLOAD_DIR` | Directory `attachment.download` saves files to. The tool is disabled when unset. |
 | `KAN_MCP_ALLOW_PRIVATE_URLS` | Set to `true` to let `url` point to private or internal addresses (blocked by default, including redirects). |
 
+Security notes for `attachment.add`:
+- `filePath` only reads inside `KAN_MCP_UPLOAD_ROOT` (symlinks that escape it are rejected).
+- `url` accepts only http(s) and refuses private, loopback and link-local addresses, also on every redirect. The address is checked right before the download; it does not pin the resolved IP, so a hostile DNS server that changes its answer between the check and the download is not covered. Leave `KAN_MCP_ALLOW_PRIVATE_URLS` unset unless you need internal URLs.
+- The file goes straight to the storage with the presigned URL; your Kan API key is never sent to the storage.
+
 Limits: 50 MB per file (Kan limit). `attachment.list` and `attachment.download` use the `attachments` field (with the storage `url`) returned by `GET /cards/{id}` and return a clear error when it is missing.
 
 Tested against Kan 0.6.0 (`ghcr.io/kanbn/kan:latest`) with an S3-compatible storage.
 
 ## Installation
 
-Install once with bunx (no cloning required):
+> This fork is **not** the `kan-mcp` package published on npm (that one is the original project, without attachments, and its tools target an older Kan API). Run it from this repository.
 
 ```bash
-bunx kan-mcp
-```
-
-Or install globally:
-
-```bash
-bun add -g kan-mcp
+git clone https://github.com/luciancsilva/kan-mcp
+cd kan-mcp
+bun install
+bun run build        # optional: creates a standalone ./kan-mcp binary
 ```
 
 ## MCP Server Configuration
 
 > **Note:** The configuration format is the same for all agents/IDEs. Check your agent/IDE documentation for where to add this JSON.
 
-Add this to your agent/IDE's MCP server configuration:
+Add this to your agent/IDE's MCP server configuration (use the absolute path of your clone, or the built binary as `command` with no `args`):
 
 ```json
 {
   "mcpServers": {
     "kan": {
-      "command": "bunx",
-      "args": ["kan-mcp"],
+      "command": "bun",
+      "args": ["run", "/absolute/path/to/kan-mcp/src/index.ts"],
       "env": {
-        "KAN_API_KEY": "kan_your_api_key_here"
+        "KAN_API_KEY": "kan_your_api_key_here",
+        "KAN_API_BASE_URL": "https://kan.example.com/api/v1",
+        "KAN_MCP_UPLOAD_ROOT": "/home/you/kan-uploads",
+        "KAN_MCP_DOWNLOAD_DIR": "/home/you/kan-downloads"
       }
     }
   }
 }
 ```
+
+`KAN_API_KEY` is required. The other variables are optional (see Configuration and Attachments above).
 
 ### Where to add the configuration
 

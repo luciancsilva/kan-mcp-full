@@ -17,7 +17,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/michaelruelas/kan-mcp"
+    "url": "https://github.com/luciancsilva/kan-mcp"
   },
   "scripts": {
     "build": "bun build src/index.ts --compile --outfile kan-mcp",

@@ -48,7 +48,7 @@ O oficial tem 46 ferramentas. O nosso MCP tem as 46 (algumas com outro nome) e m
 
 - **Anexos:** `attachment.add`, `attachment.list`, `attachment.remove`, `attachment.download` (o oficial não tem nenhuma ferramenta de anexo).
 - `server.health` e 3 resources (`kan://stats`, board por ID, board por slug).
-- Retry com backoff e timeout no cliente HTTP (o oficial não tem).
+- Retry com backoff e timeout no cliente HTTP (o oficial não tem). `POST` e `PATCH` só repetem em 429, para não duplicar cards ou comentários depois de um erro 5xx.
 - Mensagens de erro com o motivo devolvido pelo Kan, inclusive os campos inválidos.
 - `card.update` move o card de lista (`listPublicId` + `index`) e aceita `dueDate: null` para limpar a data.
 - `board.create` aceita listas, labels, template e, opcionalmente, slug e visibilidade.
